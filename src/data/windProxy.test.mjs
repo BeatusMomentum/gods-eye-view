@@ -53,6 +53,9 @@ const DECODED_U = {
 };
 const DECODED_V = { ...DECODED_U, values: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] };
 
+/** Resampled-grid metadata shared by the injected model fakes. */
+const GRID = { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 };
+
 /** Fetch double: `.idx` text, and range bodies of the requested length. */
 function makeFetch({ fail = false, counter } = {}) {
   return async (url, options = {}) => {
@@ -87,7 +90,7 @@ test('wind manifest describes the GFS cycle and resampled grid', async () => {
   assert.equal(body.cycle.date, '20260914');
   assert.equal(body.units, 'm/s');
   assert.deepEqual(body.grid, { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 });
-  assert.match(body.gridUrl, /^\/api\/wind\/grid\/20260914-6-90\.bin$/);
+  assert.match(body.gridUrl, /^\/api\/wind\/grid\/gfs-20260914-6-90\.bin\?model=gfs$/);
   assert.equal(body.stale, false);
 });
 
@@ -167,4 +170,37 @@ test('wind returns a JSON 404 for an unknown grid', async () => {
   const res = await request('/grid/nope.bin');
   assert.equal(res.statusCode, 404);
   assert.deepEqual(JSON.parse(res.body), { error: 'unknown_grid' });
+});
+
+test('wind grid ids and URLs are model-scoped', async () => {
+  const request = install(
+    proxy({
+      models: {
+        gfs: async () => ({ cycle: { date: '20260914', hour: 6 }, level: 'x', units: 'm/s', grid: { ...GRID, u: new Float32Array(12), v: new Float32Array(12) } }),
+        ifs: async () => ({ cycle: { date: '20260914', hour: 0 }, level: 'x', units: 'm/s', grid: { ...GRID, u: new Float32Array(12), v: new Float32Array(12) } }),
+      },
+    }),
+  );
+  const gfs = JSON.parse((await request('/')).body);
+  const ifs = JSON.parse((await request('/?model=ifs')).body);
+  assert.match(gfs.gridUrl, /gfs-20260914-6-90\.bin\?model=gfs$/);
+  assert.match(ifs.gridUrl, /ifs-20260914-0-90\.bin\?model=ifs$/);
+  // Each model's grid resolves through its own model parameter.
+  assert.equal((await request(gfs.gridUrl.replace('/api/wind', ''))).statusCode, 200);
+  assert.equal((await request(ifs.gridUrl.replace('/api/wind', ''))).statusCode, 200);
+});
+
+test('wind rejects a non-finite grid instead of caching it', async () => {
+  const bad = new Float32Array(12);
+  bad[3] = Number.POSITIVE_INFINITY;
+  const request = install(
+    proxy({
+      models: {
+        gfs: async () => ({ cycle: { date: '20260914', hour: 6 }, level: 'x', units: 'm/s', grid: { ...GRID, u: bad, v: new Float32Array(12) } }),
+      },
+    }),
+  );
+  const body = JSON.parse((await request('/')).body);
+  assert.equal(body.unavailable, true);
+  assert.match(body.reason, /non-finite/);
 });
