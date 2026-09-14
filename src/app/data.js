@@ -13,6 +13,7 @@ import aisLiveVesselsLayer from '../data/aisLiveVessels.js';
 import militaryInstallationsLayer from '../data/militaryInstallations.js';
 import militaryAwarenessLayer from '../data/militaryAwareness.js';
 import localDataLayers from '../data/localLayers.js';
+import windLayer from '../data/wind.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 
 /** Register the application layer catalog before allowing state restoration. */
@@ -50,6 +51,7 @@ export function createApplicationData({
   dataManager.register(militaryInstallationsLayer);
   dataManager.register(militaryAwarenessLayer);
   militaryAwarenessLayer.attachDataManager(dataManager);
+  dataManager.register(windLayer);
   for (const layer of localDataLayers) {
     dataManager.register(layer);
   }
