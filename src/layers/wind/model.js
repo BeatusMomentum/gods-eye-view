@@ -36,9 +36,9 @@ export function windSpeed(u, v) {
   return Math.hypot(u, v);
 }
 
-/** Map wind magnitude to a fixed CSS colour ramp (bright from calm upward). */
+/** Map wind magnitude to a fixed CSS colour ramp (calm blue → strong red). */
 export function windColor(speed, { max = 30 } = {}) {
-  const stops = ['#38bdf8', '#22d3ee', '#34d399', '#fbbf24', '#f87171'];
+  const stops = ['#1e3a8a', '#2563eb', '#22d3ee', '#34d399', '#fbbf24', '#f97316', '#ef4444'];
   const t = Math.max(0, Math.min(1, speed / max));
   const position = t * (stops.length - 1);
   const index = Math.min(stops.length - 2, Math.floor(position));

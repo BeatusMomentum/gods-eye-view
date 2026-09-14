@@ -80,7 +80,20 @@ export function ifsWindRanges(entries) {
 }
 
 /**
- * Fetch and decode the latest IFS 10 m wind field.
+ * Round a time offset to the nearest published IFS forecast step. IFS 0.25°
+ * oper is 3-hourly through f144 (00/12z) or f90 (06/18z).
+ * @param {number} hours - Hours elapsed since the cycle run time.
+ * @param {number} cycleHour - The cycle hour (0, 6, 12 or 18).
+ * @returns {number} A valid forecast step.
+ */
+export function nearestIfsStep(hours, cycleHour) {
+  const max = cycleHour === 6 || cycleHour === 18 ? 90 : 144;
+  const value = Math.max(0, Number.isFinite(hours) ? hours : 0);
+  return Math.max(0, Math.min(max, Math.round(value / 3) * 3));
+}
+
+/**
+ * Fetch and decode the IFS 10 m wind field valid closest to now.
  * @param {{fetchImpl?: Function, now?: Function, targetDx?: number,
  *   decodeImpl?: Function}} [options]
  * @returns {Promise<{cycle: object, level: string, units: string, grid: object}>}
@@ -91,8 +104,17 @@ export async function fetchIfsWind({
   targetDx = 1,
   decodeImpl = decodeWindGribMessage,
 } = {}) {
-  const cycle = selectLatestIfsCycle(now());
-  const urls = ifsObjectUrls(cycle);
+  const nowMs = now();
+  const cycle = selectLatestIfsCycle(nowMs);
+  const runMs = Date.UTC(
+    Number(cycle.date.slice(0, 4)),
+    Number(cycle.date.slice(4, 6)) - 1,
+    Number(cycle.date.slice(6, 8)),
+    cycle.hour,
+  );
+  // Show the field valid closest to now rather than always the analysis.
+  const forecastHour = nearestIfsStep((nowMs - runMs) / 3600_000, cycle.hour);
+  const urls = ifsObjectUrls({ ...cycle, step: forecastHour });
   const index = await fetchText({ url: urls.index, fetchImpl });
   const ranges = ifsWindRanges(parseIfsIndex(index.toString()));
   const [uBuffer, vBuffer] = await Promise.all([
@@ -112,9 +134,10 @@ export async function fetchIfsWind({
     dx: targetDx,
     dy: targetDx,
   });
-  const runIso = `${cycle.date.slice(0, 4)}-${cycle.date.slice(4, 6)}-${cycle.date.slice(6)}T${String(cycle.hour).padStart(2, '0')}:00:00.000Z`;
+  const runIso = new Date(runMs).toISOString();
+  const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {
-    cycle: { ...cycle, forecastHour: 0, runIso },
+    cycle: { ...cycle, forecastHour, runIso, validIso },
     level: '10 m above ground',
     units: 'm/s',
     grid,

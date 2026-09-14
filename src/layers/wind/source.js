@@ -11,9 +11,9 @@ export function createWindSource({ fetchImpl = (...args) => globalThis.fetch(...
       if (!response.ok) throw new Error(`Wind HTTP ${response.status}`);
       const manifest = await response.json();
       signal?.throwIfAborted();
+      if (manifest.unavailable) return manifest;
       if (!manifest?.grid || !manifest.gridUrl)
         throw new Error('Malformed wind manifest');
-      if (manifest.unavailable) return manifest;
       const gridResponse = await fetchImpl(manifest.gridUrl, { signal });
       signal?.throwIfAborted();
       if (!gridResponse.ok) throw new Error(`Wind HTTP ${gridResponse.status}`);
