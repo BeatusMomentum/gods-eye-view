@@ -5,7 +5,9 @@
 ## Satellite pass prediction
 
 - Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.
+- Mark passes visible from Earth-shadow and civil-twilight checks.
 - Add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+- `next_iss_pass` now prefers the next visible pass and falls back to the next pass with `visible: false`.
 
 ## Voice component boundaries
 

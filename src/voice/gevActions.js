@@ -2017,7 +2017,12 @@ function nextIssPass(viewer, args) {
     lonDeg = Cesium.Math.toDegrees(carto.longitude);
   }
   const minElevDeg = Number.isFinite(args.minElevationDeg) ? args.minElevationDeg : 10;
-  const result = getNextIssPass({ latDeg, lonDeg, minElevDeg });
+  // Prefer a naked-eye-visible pass (the tool contract); otherwise report the
+  // next pass with visible: false.
+  let result = getNextIssPass({ latDeg, lonDeg, minElevDeg, requireVisible: true });
+  if (result.status === 'none') {
+    result = getNextIssPass({ latDeg, lonDeg, minElevDeg });
+  }
   if (result.status === 'no-tle') {
     return {
       ok: false,
@@ -2042,6 +2047,7 @@ function nextIssPass(viewer, args) {
     durationMin: Math.max(1, Math.round((pass.setMs - pass.riseMs) / 60000)),
     peakElevationDeg: Math.round(pass.maxElevDeg),
     riseDirection: compassDir(pass.riseAzDeg),
+    visible: Boolean(pass.visible),
   };
 }
 
