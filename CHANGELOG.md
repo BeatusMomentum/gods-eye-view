@@ -2,6 +2,11 @@
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
+## Satellite pass prediction
+
+- Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.
+- Add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+
 ## Voice component boundaries
 
 - Separate voice controls, Realtime connection requests and the action runner.

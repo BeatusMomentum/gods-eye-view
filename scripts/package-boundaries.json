@@ -729,6 +729,7 @@
     "modules": [
       "src/data/issPass.js",
       "src/data/satelliteClass.js",
+      "src/data/satellitePass.js",
       "src/layers/satellites/catalog.js",
       "src/layers/satellites/controls.js",
       "src/layers/satellites/index.js",
@@ -1143,6 +1144,7 @@
       "src/data/rocketLaunches.js",
       "src/data/routePlausible.js",
       "src/data/satelliteClass.js",
+      "src/data/satellitePass.js",
       "src/data/satellites.js",
       "src/data/scenePick.js",
       "src/data/spriteOrder.js",
