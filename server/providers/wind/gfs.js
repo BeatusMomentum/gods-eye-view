@@ -87,3 +87,22 @@ export async function fetchRange({
     throw new Error('invalid range length');
   return buffer;
 }
+
+import { GFS_BUCKET, gfsObjectKey, selectLatestGfsCycle } from './catalog.js';
+import { decodeWindGribMessage } from './decode.js';
+import { resampleWindGrid } from './grid.js';
+
+/** Fetch and decode the latest GFS 10 m wind field. */
+export async function fetchGfsWind({ fetchImpl = fetch, now = () => Date.now(), targetDx = 1, decodeImpl = decodeWindGribMessage } = {}) {
+  const cycle = selectLatestGfsCycle(now());
+  const base = `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey(cycle)}`;
+  const index = await fetchText({ url: `${base}.idx`, fetchImpl });
+  const ranges = windMessageRanges(parseGfsIdx(index.toString()));
+  const [uBuffer, vBuffer] = await Promise.all([
+    fetchRange({ url: base, ...ranges.u, fetchImpl }),
+    fetchRange({ url: base, ...ranges.v, fetchImpl }),
+  ]);
+  const [u, v] = await Promise.all([decodeImpl(uBuffer), decodeImpl(vBuffer)]);
+  const grid = resampleWindGrid({ u: u.values, v: v.values, ni: u.ni, nj: u.nj, lo1: u.lo1, la1: u.la1, di: u.di, dj: u.dj, dx: targetDx, dy: targetDx });
+  return { cycle: { ...cycle, forecastHour: 0, runIso: `${cycle.date.slice(0, 4)}-${cycle.date.slice(4, 6)}-${cycle.date.slice(6)}T${String(cycle.hour).padStart(2, '0')}:00:00.000Z` }, level: '10 m above ground', units: 'm/s', grid };
+}

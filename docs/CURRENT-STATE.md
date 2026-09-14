@@ -3402,3 +3402,5 @@ releases imagery layers/listeners on replacement. Destroy invalidates pending
 work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
+
+Wind supports GFS/IFS models.

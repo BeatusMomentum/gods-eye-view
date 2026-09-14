@@ -655,3 +655,5 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
+
+- Add ECMWF IFS as a selectable wind model alongside GFS.

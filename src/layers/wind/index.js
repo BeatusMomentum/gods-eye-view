@@ -10,7 +10,7 @@ export function windStats(manifest) {
   };
 }
 
-/** Create the GFS wind data layer. */
+/** Create the GFS/IFS wind data layer. */
 export function createWindLayer({ feed, cesium = Cesium, container, services } = {}) {
   if (typeof feed?.getSnapshot !== 'function') throw new TypeError('Wind requires a snapshot source');
   let viewer = null;
@@ -19,8 +19,10 @@ export function createWindLayer({ feed, cesium = Cesium, container, services } =
   let rendering = null;
   let manifest = null;
   let error = null;
+  let model = 'gfs';
+  let generation = 0;
   const layer = {
-    id: 'wind', name: 'Wind', icon: '🌬', source: 'NOAA GFS', updateInterval: 3600_000,
+    id: 'wind', name: 'Wind', icon: '🌬', source: 'NOAA GFS / ECMWF IFS', updateInterval: 3600_000,
     init(nextViewer) { viewer = nextViewer; rendering = createWindRendering({ cesium, container: nextViewer.container, getViewer: () => viewer }); rendering.attach(); },
     enable() { enabled = true; rendering?.start(); },
     disable() { request?.abort(); request = null; enabled = false; rendering?.stop(); rendering?.clear(); },
@@ -30,7 +32,7 @@ export function createWindLayer({ feed, cesium = Cesium, container, services } =
       const controller = new AbortController();
       request = controller;
       try {
-        const snapshot = await feed.getSnapshot({ signal: signal || controller.signal });
+        const snapshot = await feed.getSnapshot({ signal: signal || controller.signal, model });
         if (!enabled || controller.signal.aborted || signal?.aborted) return false;
         manifest = snapshot;
         error = null;
@@ -42,8 +44,21 @@ export function createWindLayer({ feed, cesium = Cesium, container, services } =
         return true;
       } finally { if (request === controller) request = null; }
     },
+    setParams(params = {}) {
+      if (!['gfs', 'ifs'].includes(params.model) || params.model === model) return;
+      model = params.model;
+      generation += 1;
+      if (enabled) {
+        request?.abort();
+        const currentGeneration = generation;
+        queueMicrotask(() => {
+          if (enabled && currentGeneration === generation) layer.update(viewer);
+        });
+      }
+    },
+    getParams() { return { model }; },
     destroy() { request?.abort(); request = null; enabled = false; rendering?.destroy(); rendering = null; viewer = null; },
-    getStats() { return { ...windStats(manifest), error: error || windStats(manifest).error }; },
+    getStats() { return { ...windStats(manifest), error: error || windStats(manifest).error, model }; },
     getParticleCount() { return rendering?.getParticleCount() || 0; },
   };
   return layer;
