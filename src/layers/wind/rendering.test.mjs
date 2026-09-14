@@ -19,6 +19,7 @@ function harness({ occluded = false } = {}) {
   };
   const canvas = {
     style: {},
+    dataset: {},
     width: 0,
     height: 0,
     clientWidth: 800,
