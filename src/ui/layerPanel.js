@@ -226,11 +226,18 @@ export class LayerPanel {
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
     this._syncRowList(listContainer, controls?.list || null);
-    container.hidden = chips.length === 0 && legend.length === 0 && !controls?.info;
+    container.hidden =
+      chips.length === 0 && legend.length === 0 && !controls?.info;
 
     for (const node of [...container.children]) {
       if (
-        String(node.className).split(/\s+/).some((name) => ['data-toggle-legend-item', 'data-toggle-controls-info'].includes(name))
+        String(node.className)
+          .split(/\s+/)
+          .some((name) =>
+            ['data-toggle-legend-item', 'data-toggle-controls-info'].includes(
+              name,
+            ),
+          )
       )
         node.remove();
     }
@@ -267,7 +274,10 @@ export class LayerPanel {
       swatch.className = 'data-toggle-legend-swatch';
       swatch.style.background = item.color;
       const text = document.createElement('span');
-      text.textContent = item.count == null ? String(item.label) : `${item.label} ${this._formatCount(item.count)}`;
+      text.textContent =
+        item.count == null
+          ? String(item.label)
+          : `${item.label} ${this._formatCount(item.count)}`;
       entry.append(swatch, text);
       container.appendChild(entry);
     }

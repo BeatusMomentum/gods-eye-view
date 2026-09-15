@@ -1,4 +1,4 @@
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createWindLayer as createLayer } from '../layers/wind/index.js';
 import { createWindSource } from '../layers/wind/source.js';
 
