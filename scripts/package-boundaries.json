@@ -264,6 +264,10 @@
       "server/providers/openai/realtime.js",
       "server/providers/openai/tools.js",
       "src/hudSummaryResponse.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js"

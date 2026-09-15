@@ -136,8 +136,14 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
   assert.equal(issResult.status, 'ok');
   assert.deepEqual(issResult, numericResult);
 
-  layer._setTrackedSatelliteRefreshStateForTest({ noradId: 25544, name: 'ISS (ZARYA)', satrec,
-    neighbours: [{ noradId: 10, name: 'STARLINK ONE', satrec }, { noradId: 11, name: 'STARLINK TWO', satrec }],
+  layer._setTrackedSatelliteRefreshStateForTest({
+    noradId: 25544,
+    name: 'ISS (ZARYA)',
+    satrec,
+    neighbours: [
+      { noradId: 10, name: 'STARLINK ONE', satrec },
+      { noradId: 11, name: 'STARLINK TWO', satrec },
+    ],
   });
   assert.equal(layer.resolveSatelliteForPass('25544').noradId, 25544);
   assert.equal(layer.resolveSatelliteForPass('iss (zarya)').noradId, 25544);

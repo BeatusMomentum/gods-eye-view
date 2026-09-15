@@ -77,11 +77,18 @@ test('metadata cannot add tools, fields, types or enum values', () => {
     assert.throws(() => createActionTools(descriptions), TypeError);
 });
 
-
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
-  const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter((tool) => tool.name !== 'next_satellite_pass');
-  const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters.properties.layers.items;
-  layers.enum = layers.enum.filter((key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key));
+  const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
+    (tool) => tool.name !== 'next_satellite_pass',
+  );
+  const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
+    .properties.layers.items;
+  layers.enum = layers.enum.filter(
+    (key) => !['satellites', 'local-datacenters', 'local-dams'].includes(key),
+  );
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
-  assert.equal(createHash('sha256').update(JSON.stringify(legacy)).digest('hex'), '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c');
+  assert.equal(
+    createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
+    '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c',
+  );
 });

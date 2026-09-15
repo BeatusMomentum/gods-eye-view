@@ -2,7 +2,7 @@
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
-Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records; omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
+Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records (default 2,000 per new layer, core satellite rows before dense extras); omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
 
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
@@ -12,7 +12,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/result, interruption and completion events; stopping or replacing a session cancels pending actions. Alternate adapters can use the same controls and action runner.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds the same 28 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 29 tools, retaining the existing 28 names and argument contracts apart from the three additive analyst-layer enum values using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
 
 Portable source exports provide Radio Browser station normalization, CCTV feed types and regional records independently of HTTP middleware. Radio normalization accepts an explicit URL policy; the standalone directory retains its existing HTTPS rules. Tile coordinate validation accepts explicit zoom bounds with unchanged traffic defaults. Cache, request and rendering owners remain unchanged.
 
