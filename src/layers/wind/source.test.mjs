@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWindSource } from './source.js';
-const manifest = { model: 'gfs', grid: { nx: 2, ny: 1, lo1: 0, la1: 90, dx: 180, dy: 180 }, gridUrl: '/api/wind/grid/test.bin' };
+const manifest = { model: 'gfs', grid: { nx: 2, ny: 1, lo1: 0, la1: 90, dx: 180, dy: 180 }, gridUrl: '/api/wind/grid/gfs-test.bin?model=gfs' };
 const response = (value) => new Response(typeof value === 'object' && !(value instanceof ArrayBuffer) ? JSON.stringify(value) : value);
 test('wind source splits a bounded field and preserves unavailable responses', async () => {
   const source = createWindSource({ fetchImpl: async (url) => response(url.includes('manifest') ? manifest : Float32Array.from([1,2,3,4]).buffer) });

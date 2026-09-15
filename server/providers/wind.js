@@ -1,193 +1,99 @@
-import {
-  GFS_BUCKET,
-  gfsObjectKey,
-  selectLatestGfsCycle,
-} from './wind/catalog.js';
-import {
-  fetchText,
-  fetchRange,
-  parseGfsIdx,
-  windMessageRanges,
-} from './wind/gfs.js';
+import { fetchGfsWind } from './wind/gfs.js';
+import { fetchIfsWind } from './wind/ifs.js';
 import { decodeWindGribMessage } from './wind/decode.js';
-import { resampleWindGrid } from './wind/grid.js';
 
-/**
- * NOAA GFS 10 m wind proxy.
- *
- * Selects the latest available GFS cycle, reads its `.idx` inventory, byte-range
- * fetches only the UGRD/VGRD 10 m GRIB2 messages, decodes them with ecCodes
- * (WASM), resamples to a compact grid, and serves a manifest plus a Float32
- * grid (U values then V values). Keyless; cached per cycle for an hour.
- *
- * Routes (mounted at `/api/wind`):
- *   GET /api/wind/manifest   → manifest JSON
- *   GET /api/wind/grid/<id>.bin → Float32 U…V payload
- *   GET /api/wind/status     → manifest without `gridUrl`
- *
- * @param {{fetchImpl?: Function, now?: Function, decodeImpl?: Function,
- *   targetDx?: number, ttlMs?: number}} [options]
- * @returns {import('vite').Plugin}
- */
-export function windProxy({
-  fetchImpl = fetch,
-  now = () => Date.now(),
-  decodeImpl = decodeWindGribMessage,
-  targetDx = 1,
-  ttlMs = 3600_000,
-} = {}) {
-  /** @type {?{id: string, idGrid: string, fetchedAt: number, manifest: object, grid: ?object}} */
-  let cached = null;
-  /** @type {?Promise<object>} */
-  let loading = null;
-  let lastAttempt = -Infinity;
-  let controller = null;
-  let waiters = 0;
-
+/** Serve bounded, single-flight, per-model forecast snapshots from fixed providers. */
+export function windProxy({ fetchImpl = fetch, now = () => Date.now(), decodeImpl = decodeWindGribMessage, targetDx = 1, ttlMs = 3600_000, timeoutMs = 40_000, models = { gfs: fetchGfsWind, ifs: fetchIfsWind } } = {}) {
+  const caches = new Map();
+  const loadings = new Map();
+  const grids = new Map();
+  const attempts = new Map();
+  const unavailable = (model) => ({ manifest: { model, schemaVersion: 1, unavailable: true, stale: true, reason: 'Wind upstream unavailable' } });
   const sendJson = (res, value, status = 200) => {
-    res.writeHead(status, {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-    });
+    res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(value));
   };
-
-  const cycleRunIso = (cycle) =>
-    `${cycle.date.slice(0, 4)}-${cycle.date.slice(4, 6)}-${cycle.date.slice(6)}T${String(cycle.hour).padStart(2, '0')}:00:00.000Z`;
-
-  async function refresh() {
-    const cycle = selectLatestGfsCycle(now());
-    const id = `${cycle.date}-${cycle.hour}`;
-    if (cached && cached.id === id && now() - cached.fetchedAt < ttlMs)
-      return cached;
-    if (loading) return loading;
-    if (cached && now() - lastAttempt < 60_000) return cached;
-    lastAttempt = now();
-    controller = new AbortController();
-    const signal = controller.signal;
-    const timer = setTimeout(() => controller.abort(), 40_000);
-    loading = (async () => {
+  function refresh(model) {
+    const controller = new AbortController();
+    const operation = { controller, waiters: 0, promise: null };
+    loadings.set(model, operation);
+    attempts.set(model, now());
+    operation.promise = (async () => {
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const base = `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey(cycle)}`;
-        const index = await fetchText({ url: `${base}.idx`, fetchImpl, signal });
-        const ranges = windMessageRanges(parseGfsIdx(index.toString()));
-        const [uBuffer, vBuffer] = await Promise.all([
-          fetchRange({ url: base, ...ranges.u, fetchImpl, signal }),
-          fetchRange({ url: base, ...ranges.v, fetchImpl, signal }),
-        ]);
-        const [u, v] = await Promise.all([
-          decodeImpl(uBuffer),
-          decodeImpl(vBuffer),
-        ]);
-        const grid = resampleWindGrid({
-          u: u.values,
-          v: v.values,
-          ni: u.ni,
-          nj: u.nj,
-          lo1: u.lo1,
-          la1: u.la1,
-          di: u.di,
-          dj: u.dj,
-          dx: targetDx,
-          dy: targetDx,
-        });
-        signal.throwIfAborted();
-        if ((!grid.u.every(Number.isFinite) || !grid.v.every(Number.isFinite))) throw new Error('Invalid wind grid');
-        const idGrid = `${id}-${targetDx}`;
+        const value = await models[model]({ fetchImpl, now, decodeImpl, targetDx, signal: controller.signal });
+        controller.signal.throwIfAborted();
+        const { grid, cycle } = value;
+        if (!grid.u.every(Number.isFinite) || !grid.v.every(Number.isFinite)) throw new Error('Invalid wind grid');
+        const id = `${model}-${cycle.date}-${cycle.hour}-f${cycle.forecastHour || 0}-${targetDx}`;
         const manifest = {
-          schemaVersion: 1,
-          model: 'gfs',
-          cycle: { ...cycle, forecastHour: 0, runIso: cycleRunIso(cycle), validIso: cycleRunIso(cycle) },
-          fetchedAt: now(),
-          level: '10 m above ground',
-          units: 'm/s',
-          grid: {
-            nx: grid.nx,
-            ny: grid.ny,
-            lo1: grid.lo1,
-            la1: grid.la1,
-            dx: grid.dx,
-            dy: grid.dy,
-          },
-          stale: false,
-          unavailable: false,
-          reason: null,
-          gridUrl: `/api/wind/grid/${idGrid}.bin`,
+          schemaVersion: 1, model, cycle, fetchedAt: now(), level: value.level, units: value.units,
+          grid: { nx: grid.nx, ny: grid.ny, lo1: grid.lo1, la1: grid.la1, dx: grid.dx, dy: grid.dy },
+          stale: false, unavailable: false, reason: null,
+          gridUrl: `/api/wind/grid/${id}.bin?model=${model}`,
         };
-        cached = { id, idGrid, fetchedAt: manifest.fetchedAt, manifest, grid };
-        return cached;
-      } catch (error) {
-        if (cached) {
-          cached = {
-            ...cached,
-            manifest: { ...cached.manifest, stale: true, reason: 'Wind upstream unavailable' },
-          };
-        } else {
-          cached = {
-            id: null,
-            idGrid: null,
-            fetchedAt: now(),
-            grid: null,
-            manifest: {
-              schemaVersion: 1,
-              model: 'gfs',
-              stale: true,
-              unavailable: true,
-              reason: 'Wind upstream unavailable',
-            },
-          };
+        const state = { id, grid, manifest, fetchedAt: now() };
+        caches.set(model, state);
+        // Retain the previous issued grid as well to cover a manifest/grid rollover.
+        const history = grids.get(model) || new Map();
+        history.set(id, state);
+        while (history.size > 2) history.delete(history.keys().next().value);
+        grids.set(model, history);
+        return state;
+      } catch {
+        if (controller.signal.aborted && operation.waiters === 0) {
+          attempts.delete(model);
+          return unavailable(model);
         }
-        return cached;
+        const old = caches.get(model);
+        if (old) {
+          old.manifest = { ...old.manifest, stale: true, reason: 'Wind upstream unavailable' };
+          return old;
+        }
+        return unavailable(model);
       } finally {
         clearTimeout(timer);
-        loading = null;
-        controller = null;
+        controller.abort(); // Cancel a sibling request if the other component failed.
+        if (loadings.get(model) === operation) loadings.delete(model);
       }
     })();
-    return loading;
+    return operation;
   }
-
   const handler = async (req, res) => {
-    const path = new URL(req.url, 'http://localhost').pathname;
+    const url = new URL(req.url, 'http://localhost');
+    const model = url.searchParams.get('model') || 'gfs';
     if (req.method !== 'GET') return sendJson(res, { error: 'method_not_allowed' }, 405);
-    if (!['/', '/manifest', '/status'].includes(path) && !/^\/grid\/[\w.-]+\.bin$/.test(path)) return sendJson(res, { error: 'not_found' }, 404);
-    // Grid reads never initiate acquisition; an issued manifest owns its cached grid.
-    if (path.startsWith('/grid/') && (!cached?.grid || path !== `/grid/${cached.idGrid}.bin`)) return sendJson(res, { error: 'unknown_grid' }, 404);
-    let disconnected = false;
-    const close = () => { disconnected = true; waiters -= 1; if (waiters === 0) controller?.abort(); };
-    waiters += 1;
-    res.once?.('close', close);
-    let state;
-    try { state = path.startsWith('/grid/') ? cached : await refresh(); }
-    finally { res.removeListener?.('close', close); if (!disconnected) waiters -= 1; }
-    if (disconnected) return;
-    if (path === '/status') {
-      const { gridUrl, ...manifest } = state.manifest;
-      return sendJson(res, manifest);
+    if (!['gfs', 'ifs'].includes(model) || !Object.hasOwn(models, model)) return sendJson(res, { error: 'unknown_model' }, 400);
+    if (url.pathname.startsWith('/grid/')) {
+      const id = url.pathname.slice(6).replace(/\.bin$/, '');
+      const state = url.pathname === `/grid/${id}.bin` && grids.get(model)?.get(id);
+      if (!state) return sendJson(res, { error: 'unknown_grid' }, 404);
+      const bytes = Buffer.concat([Buffer.from(state.grid.u.buffer, state.grid.u.byteOffset, state.grid.u.byteLength), Buffer.from(state.grid.v.buffer, state.grid.v.byteOffset, state.grid.v.byteLength)]);
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'public, max-age=3600, immutable' });
+      return res.end(bytes);
     }
-    if (path.startsWith('/grid/')) {
-      if (!state.grid || path !== `/grid/${state.idGrid}.bin`)
-        return sendJson(res, { error: 'unknown_grid' }, 404);
-      const payload = Buffer.concat([
-        Buffer.from(state.grid.u.buffer, state.grid.u.byteOffset, state.grid.u.byteLength),
-        Buffer.from(state.grid.v.buffer, state.grid.v.byteOffset, state.grid.v.byteLength),
-      ]);
-      res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
-        'Cache-Control': 'public, max-age=3600, immutable',
-      });
-      return res.end(payload);
+    if (!['/', '/manifest', '/status'].includes(url.pathname)) return sendJson(res, { error: 'not_found' }, 404);
+    let state = caches.get(model);
+    if (!state || now() - state.fetchedAt >= ttlMs) {
+      let operation = loadings.get(model);
+      if (!operation && now() - (attempts.get(model) ?? -Infinity) >= 60_000) operation = refresh(model);
+      if (operation) {
+        let disconnected = false;
+        operation.waiters += 1;
+        const close = () => { disconnected = true; if (--operation.waiters === 0) operation.controller.abort(); };
+        res.once?.('close', close);
+        try { state = await operation.promise; }
+        finally { res.removeListener?.('close', close); if (!disconnected) operation.waiters -= 1; }
+        if (disconnected) return;
+      }
     }
-    return sendJson(res, state.manifest);
+    const manifest = state?.manifest || unavailable(model).manifest;
+    if (url.pathname === '/status') { const { gridUrl, ...status } = manifest; return sendJson(res, status); }
+    return sendJson(res, manifest);
   };
-
   return {
     name: 'wind',
-    configureServer({ middlewares }) {
-      middlewares.use('/api/wind', handler);
-    },
-    configurePreviewServer({ middlewares }) {
-      middlewares.use('/api/wind', handler);
-    },
+    configureServer({ middlewares }) { middlewares.use('/api/wind', handler); },
+    configurePreviewServer({ middlewares }) { middlewares.use('/api/wind', handler); },
   };
 }

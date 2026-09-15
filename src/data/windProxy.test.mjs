@@ -53,6 +53,9 @@ const DECODED_U = {
 };
 const DECODED_V = { ...DECODED_U, values: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] };
 
+/** Resampled-grid metadata shared by the injected model fakes. */
+const GRID = { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 };
+
 /** Fetch double: `.idx` text, and range bodies of the requested length. */
 function makeFetch({ fail = false, counter } = {}) {
   return async (url, options = {}) => {
@@ -87,7 +90,7 @@ test('wind manifest describes the GFS cycle and resampled grid', async () => {
   assert.equal(body.cycle.date, '20260914');
   assert.equal(body.units, 'm/s');
   assert.deepEqual(body.grid, { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 });
-  assert.match(body.gridUrl, /^\/api\/wind\/grid\/20260914-6-90\.bin$/);
+  assert.match(body.gridUrl, /^\/api\/wind\/grid\/gfs-20260914-6-f6-90\.bin\?model=gfs$/);
   assert.equal(body.stale, false);
 });
 
@@ -167,4 +170,66 @@ test('wind returns a JSON 404 for an unknown grid', async () => {
   const res = await request('/grid/nope.bin');
   assert.equal(res.statusCode, 404);
   assert.deepEqual(JSON.parse(res.body), { error: 'unknown_grid' });
+});
+
+test('wind grid ids and URLs are model-scoped', async () => {
+  const request = install(
+    proxy({
+      models: {
+        gfs: async () => ({ cycle: { date: '20260914', hour: 6 }, level: 'x', units: 'm/s', grid: { ...GRID, u: new Float32Array(12), v: new Float32Array(12) } }),
+        ifs: async () => ({ cycle: { date: '20260914', hour: 0 }, level: 'x', units: 'm/s', grid: { ...GRID, u: new Float32Array(12), v: new Float32Array(12) } }),
+      },
+    }),
+  );
+  const gfs = JSON.parse((await request('/')).body);
+  const ifs = JSON.parse((await request('/?model=ifs')).body);
+  assert.match(gfs.gridUrl, /gfs-20260914-6-f0-90\.bin\?model=gfs$/);
+  assert.match(ifs.gridUrl, /ifs-20260914-0-f0-90\.bin\?model=ifs$/);
+  // Each model's grid resolves through its own model parameter.
+  assert.equal((await request(gfs.gridUrl.replace('/api/wind', ''))).statusCode, 200);
+  assert.equal((await request(ifs.gridUrl.replace('/api/wind', ''))).statusCode, 200);
+});
+
+test('wind rejects a non-finite grid instead of caching it', async () => {
+  const bad = new Float32Array(12);
+  bad[3] = Number.POSITIVE_INFINITY;
+  const request = install(
+    proxy({
+      models: {
+        gfs: async () => ({ cycle: { date: '20260914', hour: 6 }, level: 'x', units: 'm/s', grid: { ...GRID, u: bad, v: new Float32Array(12) } }),
+      },
+    }),
+  );
+  const body = JSON.parse((await request('/')).body);
+  assert.equal(body.unavailable, true);
+  assert.equal(body.reason, 'Wind upstream unavailable');
+});
+
+test('wind rejects unknown models, paths and methods before acquisition', async () => {
+  let calls = 0;
+  const request = install(proxy({ models: { gfs: async () => { calls++; throw new Error(); } } }));
+  assert.equal((await request('/?model=toString')).statusCode, 400);
+  assert.equal((await request('/secret')).statusCode, 404);
+  assert.equal((await request('/manifest', 'POST')).statusCode, 405);
+  assert.equal((await request('/grid/unknown.bin')).statusCode, 404);
+  assert.equal(calls, 0);
+});
+
+test('wind caches forecast steps separately and keeps a prior issued grid readable', async () => {
+  let clock = Date.UTC(2026, 8, 14, 12); let step = 6;
+  const request = install(proxy({ now: () => clock, models: { gfs: async () => ({ cycle: { date: '20260914', hour: 6, forecastHour: step }, level:'10 m', units:'m/s', grid: { ...GRID, u: new Float32Array(12).fill(step), v: new Float32Array(12) } }) } }));
+  const first = JSON.parse((await request('/')).body);
+  clock += 3600_000; step = 7;
+  const second = JSON.parse((await request('/')).body);
+  assert.notEqual(first.gridUrl, second.gridUrl);
+  assert.equal((await request(first.gridUrl.replace('/api/wind',''))).statusCode, 200);
+});
+
+test('wind failure backoff prevents unbounded repeated upstream acquisition', async () => {
+  let calls = 0;
+  const request = install(proxy({ models: { gfs: async () => { calls++; throw new Error('private upstream detail'); } } }));
+  const results = await Promise.all([request('/'), request('/')]);
+  assert.equal(calls, 1);
+  assert.equal(JSON.parse(results[0].body).reason, 'Wind upstream unavailable');
+  await request('/'); assert.equal(calls, 1);
 });
