@@ -725,5 +725,8 @@
   "scripts/qa-transit-browser.mjs",
   "scripts/format-runtime.json",
   "src/tooling/transitService.test.mjs",
-  "src/sources/overpassFeatures.test.mjs"
+  "src/sources/overpassFeatures.test.mjs",
+  "src/data/cctvHlsStream.test.mjs",
+  "src/layers/cctv/videoPlayback.test.mjs",
+  "src/ui/cctvVideo.test.mjs"
 ]

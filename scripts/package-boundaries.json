@@ -161,6 +161,7 @@
       "server/providers/cctv/normalize.js",
       "server/providers/cctv/range.js",
       "server/providers/cctv/sources.js",
+      "server/providers/cctv/stream.js",
       "server/providers/common/http.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",
@@ -413,6 +414,7 @@
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
+      "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js"
     ],
     "external": []
@@ -511,6 +513,7 @@
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
+      "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
       "src/ui/cockpit.js",
@@ -965,6 +968,7 @@
       "src/layers/cctv/policy.js",
       "src/layers/cctv/presentation.js",
       "src/layers/cctv/projection.js",
+      "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
@@ -975,7 +979,7 @@
       "src/data/inputOwnership.js",
       "src/layers/cctv/sourcePolicy.js"
     ],
-    "external": ["cesium"]
+    "external": ["hls.js", "cesium"]
   },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
@@ -1343,6 +1347,7 @@
       "src/layers/cctv/policy.js",
       "src/layers/cctv/presentation.js",
       "src/layers/cctv/projection.js",
+      "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
@@ -1554,6 +1559,7 @@
       "src/ui/cctvCalibration.js",
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
+      "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
       "src/ui/cockpit.js",
@@ -1694,6 +1700,7 @@
       "src/sources/overpassRoads.js"
     ],
     "external": [
+      "hls.js",
       "@mapbox/vector-tile",
       "cesium",
       "egm96-universal",
@@ -1858,6 +1865,7 @@
       "src/layers/cctv/policy.js",
       "src/layers/cctv/presentation.js",
       "src/layers/cctv/projection.js",
+      "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
@@ -2088,6 +2096,7 @@
       "src/sources/overpassRoads.js"
     ],
     "external": [
+      "hls.js",
       "cesium",
       "egm96-universal",
       "satellite.js",
