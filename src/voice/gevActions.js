@@ -2067,7 +2067,10 @@ function nextSatellitePass(viewer, dataManager, args) {
     getNextIssPass: (options) => layer.getNextSatellitePass(identity.noradId, { ...options, requireVisible: args.visibleOnly === true }),
   } }]]) };
   const result = nextIssPass(viewer, adapter, args);
-  if (result.error) result.error = result.error.replace(/ISS/g, identity.name || String(identity.noradId));
+  if (result.error) {
+    result.error = result.error.replace(/ISS/g, identity.name || String(identity.noradId));
+    if (args.visibleOnly === true) result.error += ' Search required estimated illumination under a dark sky.';
+  }
   return { ...result, action: 'next_satellite_pass', noradId: identity.noradId, name: identity.name, visibleOnly: args.visibleOnly === true, horizonHours: 24 };
 }
 
