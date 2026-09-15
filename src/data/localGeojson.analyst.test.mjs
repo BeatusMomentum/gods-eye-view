@@ -175,6 +175,7 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     assert.deepEqual(layer.getAnalystRecords(), [], 'disable keeps stems but analyst snapshot is empty');
   } finally {
     layer.destroy(viewer);
+    assert.deepEqual(layer.getAnalystRecords(), [], 'destroy releases analyst records');
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;

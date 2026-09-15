@@ -248,3 +248,17 @@ test('helpers: haversine sanity + scope radius', () => {
   const scoped = applyScope(FLIGHTS, { kind: 'radius' }, { center: { lat: 30.27, lon: -97.74 }, km: 50 });
   assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
 });
+
+test('bounded loaded cohorts disclose truncation before filtering and retain it on follow-up', async () => {
+  const engine = createAnalystEngine({
+    getRecords: () => [{ id: 'sample dam', lat: 0, lon: 0, name: 'sample' }],
+    getRecordCoverage: () => ({ basis: 'bounded-loaded-records', recordsExamined: 1, loadedCount: 3000, sourceTruncated: true }),
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const result = await engine.query({ layers: ['local-dams'], scope: { kind: 'anywhere' }, sortBy: 'distance' });
+  assert.equal(result.count, 1);
+  assert.equal(result.coverage.layersQueried[0].sourceTruncated, true);
+  assert.match(result.coverage.note, /omitted records may change the nearest item or count/);
+  const followUp = await engine.query({ followUp: true });
+  assert.equal(followUp.coverage.layersQueried[0].loadedCount, 3000);
+});

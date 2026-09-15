@@ -15,7 +15,7 @@ import { ISS_NORAD } from './policy.js';
 export function mapAnalystRecord(raw) {
   const num = (v) => (Number.isFinite(v) ? v : null);
   const text = (v) => { const t = String(v ?? '').trim(); return t || null; };
-  const noradNum = Number(raw?.noradId);
+  const noradNum = raw?.noradId == null || raw.noradId === '' ? NaN : Number(raw.noradId);
   const noradId = Number.isFinite(noradNum) ? String(Math.trunc(noradNum)) : text(raw?.noradId);
   const name = text(raw?.name);
   const group = text(raw?.group);
