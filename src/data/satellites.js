@@ -49,3 +49,5 @@ export {
   ISS_OVERLAY_SOURCE_OPTIONS,
 } from '../layers/satellites/index.js';
 export default layer;
+
+export { mapAnalystRecord } from '../layers/satellites/records.js';

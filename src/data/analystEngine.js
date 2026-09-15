@@ -33,6 +33,9 @@ export const ANALYST_LAYERS = {
   'ais-live-vessels': { numeric: ['speedKts', 'courseDeg'], text: ['name', 'mmsi', 'shipType', 'destination', 'navStatus'], flags: [] },
   'local-firms': { numeric: ['frp'], text: ['confidence', 'satellite'], flags: [] },
   earthquakes: { numeric: ['magnitude', 'depthKm'], text: ['place'], flags: [] },
+  satellites: { numeric: ['altitudeM', 'speedMps'], text: ['name', 'noradId', 'satelliteClass', 'group'], flags: [] },
+  'local-datacenters': { numeric: [], text: ['name', 'operator', 'capacity'], flags: [] },
+  'local-dams': { numeric: [], text: ['name', 'operator', 'river', 'output'], flags: [] },
 };
 
 const EARTH_R_KM = 6371;
@@ -132,7 +135,7 @@ export function createAnalystEngine(providers) {
       for (const key of layers) {
         if (!ANALYST_LAYERS[key]) continue;
         const rows = providers.getRecords(key) || [];
-        layersQueried.push({ layerKey: key, records: rows.length });
+        layersQueried.push({ layerKey: key, records: rows.length, ...providers.getRecordCoverage?.(key, rows) });
         for (const row of rows) records.push({ layerKey: key, ...row });
       }
     }
@@ -229,7 +232,9 @@ export function createAnalystEngine(providers) {
         layersQueried,
         scope: scopeNote,
         followUp: Boolean(spec.followUp && lastResult),
-        note: 'client-side data only — answers cover what the enabled layers currently hold',
+        note: layersQueried.some((layer) => layer.basis === 'bounded-loaded-records')
+          ? 'Counts and ranks cover the bounded examined loaded records only; omitted records may change the nearest item or count. Satellite distance is ground distance, not slant range.'
+          : 'client-side data only — answers cover what the enabled layers currently hold',
       },
       // Surfaced so the narration can name the centre it measured from rather
       // than implying a view-centred answer.

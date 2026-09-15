@@ -1,5 +1,7 @@
 # Changelog
 
+Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
 
 - Expose reference feed factories independently of standalone catalog construction; preserve source choices and asset attribution.

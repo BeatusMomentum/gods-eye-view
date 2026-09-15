@@ -3253,6 +3253,18 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null, plac
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
     },
+    getRecordCoverage(layerKey, rows) {
+      if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey)) return null;
+      const module = dataManager.layers.get(layerKey)?.module;
+      const loaded = module?.getStats?.().count;
+      return {
+        basis: 'bounded-loaded-records',
+        recordsExamined: rows.length,
+        loadedCount: Number.isFinite(loaded) ? loaded : null,
+        sourceTruncated: Number.isFinite(loaded) ? loaded > rows.length : null,
+        note: 'Counts and ranks apply only to these examined loaded records, not all satellites or infrastructure; distance is ground great-circle distance.',
+      };
+    },
     resolveRegionRing,
     /**
      * The active Contacts subject, when there is one — the centre the operator
@@ -3308,7 +3320,7 @@ async function runAnalystQuery(analystEngine, dataManager, args = {}, _layerEnab
   // model burned the turn on retries (owner field session 2026-08-21, 23:48).
   const items = result.items.map((r) => {
     const compact = { layerKey: r.layerKey, id: r.id };
-    for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place']) {
+    for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place', 'noradId', 'satelliteClass', 'group', 'river', 'output', 'capacity']) {
       if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
     }
     return compact;
