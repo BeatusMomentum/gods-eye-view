@@ -132,7 +132,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const installMiddleware = (server) => {
     server.httpServer?.on('close', () => {
       puller.shutdown();
-
     });
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
@@ -201,48 +200,112 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(url.pathname);
-          if (!match) { res.writeHead(404); res.end(); return; }
+          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(
+            url.pathname,
+          );
+          if (!match) {
+            res.writeHead(404);
+            res.end();
+            return;
+          }
           const cameraId = decodeURIComponent(match[1]);
           const source = sourceById.get(cameraId);
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
           const leaseId = url.searchParams.get('lease');
-          if (feedType === 'hls' && !/^[a-f0-9-]{36}$/i.test(leaseId || '')) { res.writeHead(400); res.end(); return; }
+          if (feedType === 'hls' && !/^[a-f0-9-]{36}$/i.test(leaseId || '')) {
+            res.writeHead(400);
+            res.end();
+            return;
+          }
           if (req.method === 'DELETE') {
             if (leaseId) puller.release(cameraId, leaseId);
-            res.writeHead(204); res.end(); return;
+            res.writeHead(204);
+            res.end();
+            return;
           }
-          if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
+          if (req.method !== 'GET') {
+            res.writeHead(405);
+            res.end();
+            return;
+          }
           if (feedType === 'hls') {
-            if (!/^https?:\/\//i.test(mediaUrl) || !/\.m3u8(?:\?|$)/i.test(mediaUrl)) {
+            if (
+              !/^https?:\/\//i.test(mediaUrl) ||
+              !/\.m3u8(?:\?|$)/i.test(mediaUrl)
+            ) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'This stream requires an unsupported transport; use the frame fallback' }));
+              res.end(
+                JSON.stringify({
+                  error:
+                    'This stream requires an unsupported transport; use the frame fallback',
+                }),
+              );
               return;
             }
             if (match[2]) {
-              const body = puller.getSegment(cameraId, url.searchParams.get('session'), Number(match[3]), leaseId);
-              res.writeHead(body ? 200 : 404, { 'Content-Type': 'video/mp2t', 'Cache-Control': 'no-store' });
-              res.end(body || undefined); return;
+              const body = puller.getSegment(
+                cameraId,
+                url.searchParams.get('session'),
+                Number(match[3]),
+                leaseId,
+              );
+              res.writeHead(body ? 200 : 404, {
+                'Content-Type': 'video/mp2t',
+                'Cache-Control': 'no-store',
+              });
+              res.end(body || undefined);
+              return;
             }
             const downstream = watchDownstreamClose(res);
             let entry;
-            const cancelPending = () => { if (entry) puller.release(cameraId, leaseId); };
+            const cancelPending = () => {
+              if (entry) puller.release(cameraId, leaseId);
+            };
             try {
               entry = await puller.ensure(cameraId, mediaUrl, leaseId);
-              if (downstream.closed) { cancelPending(); return; }
-              downstream.signal.addEventListener('abort', cancelPending, { once: true });
-              if (!(await puller.waitReady(entry, downstream.signal))) throw new Error('Stream unavailable');
-              const playlist = await puller.buildPlaylist(entry, cameraId, leaseId);
+              if (downstream.closed) {
+                cancelPending();
+                return;
+              }
+              downstream.signal.addEventListener('abort', cancelPending, {
+                once: true,
+              });
+              if (!(await puller.waitReady(entry, downstream.signal)))
+                throw new Error('Stream unavailable');
+              const playlist = await puller.buildPlaylist(
+                entry,
+                cameraId,
+                leaseId,
+              );
               if (downstream.closed) return;
               if (!playlist) throw new Error('Stream unavailable');
-              setHealth(cameraId, { status: 'ok', sourceKind: 'live', label: source?.provider || 'Configured source', message: 'Live HLS connected' });
-              res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store', 'X-CCTV-Source': 'hls-pull', 'X-CCTV-Session': entry.token });
+              setHealth(cameraId, {
+                status: 'ok',
+                sourceKind: 'live',
+                label: source?.provider || 'Configured source',
+                message: 'Live HLS connected',
+              });
+              res.writeHead(200, {
+                'Content-Type': 'application/vnd.apple.mpegurl',
+                'Cache-Control': 'no-store',
+                'X-CCTV-Source': 'hls-pull',
+                'X-CCTV-Session': entry.token,
+              });
               res.end(playlist);
             } catch {
-              setHealth(cameraId, { status: 'degraded', sourceKind: 'fallback', label: source?.provider || 'Configured source', message: 'Live HLS unavailable' });
+              setHealth(cameraId, {
+                status: 'degraded',
+                sourceKind: 'fallback',
+                label: source?.provider || 'Configured source',
+                message: 'Live HLS unavailable',
+              });
               if (!downstream.closed) {
-                res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '2' });
+                res.writeHead(503, {
+                  'Content-Type': 'application/json',
+                  'Cache-Control': 'no-store',
+                  'Retry-After': '2',
+                });
                 res.end(JSON.stringify({ error: 'Live stream unavailable' }));
               }
             } finally {
@@ -250,7 +313,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             }
             return;
           }
-          if (match[2] || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
+          if (match[2] || req.method !== 'GET') {
+            res.writeHead(404);
+            res.end();
+            return;
+          }
 
           if (!mediaUrl || !/^https?:\/\//i.test(mediaUrl)) {
             setHealth(cameraId, {

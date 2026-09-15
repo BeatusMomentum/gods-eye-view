@@ -1626,8 +1626,18 @@ export async function loadDelDOTSourcesFromOpenData() {
 
       // Prefer the catalog's HTTPS HLS transport; no subprocess is required.
       let stream;
-      try { stream = new URL(String(row?.urls?.m3u8s || '')); } catch { continue; }
-      if (stream.origin !== 'https://video.deldot.gov' || stream.username || stream.password || !/^\/live\/[A-Za-z0-9_.-]+\/playlist\.m3u8$/.test(stream.pathname)) continue;
+      try {
+        stream = new URL(String(row?.urls?.m3u8s || ''));
+      } catch {
+        continue;
+      }
+      if (
+        stream.origin !== 'https://video.deldot.gov' ||
+        stream.username ||
+        stream.password ||
+        !/^\/live\/[A-Za-z0-9_.-]+\/playlist\.m3u8$/.test(stream.pathname)
+      )
+        continue;
       const streamUrl = stream.href;
 
       const id = String(row?.id || '').trim();

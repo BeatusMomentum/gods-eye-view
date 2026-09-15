@@ -39,9 +39,17 @@ export class CctvControls {
     this._actionGeneration = 0;
     this._initCctvPanel();
     if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
-      this._videoVisibilityObserver = new MutationObserver(() => this._renderCctvState(this._cctvState));
-      if (this._cctvPanel) this._videoVisibilityObserver.observe(this._cctvPanel, { attributes: true, attributeFilter: ['class', 'hidden'] });
-      this.listen(document, 'visibilitychange', () => this._renderCctvState(this._cctvState));
+      this._videoVisibilityObserver = new MutationObserver(() =>
+        this._renderCctvState(this._cctvState),
+      );
+      if (this._cctvPanel)
+        this._videoVisibilityObserver.observe(this._cctvPanel, {
+          attributes: true,
+          attributeFilter: ['class', 'hidden'],
+        });
+      this.listen(document, 'visibilitychange', () =>
+        this._renderCctvState(this._cctvState),
+      );
     }
   }
   listen(target, type, handler, options = {}) {

@@ -233,20 +233,32 @@ export function createProjection({
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
       runtime.video = video;
-      runtime.playback = attachCctvVideo(video, parts.frames.mediaUrlFor(record.camera), feedType, {
-        onFailure: () => {
-          if (runtime.disposed) return;
-          runtime.video = null;
-          runtime.mode = 'image';
-          runtime.image = new Image();
-          runtime.image.decoding = 'async';
-          runtime.image.onload = () => { runtime.imageLoading = false; runtime.imageReady = true; runtime.imageStamp = Date.now(); };
-          runtime.image.onerror = () => { runtime.imageLoading = false; runtime.imageReady = false; };
-          runtime.planeMaterial.image = runtime.canvas;
-          parts.frames.refreshProjectionImage(record, true);
-          parts.presentation.notifyListeners();
+      runtime.playback = attachCctvVideo(
+        video,
+        parts.frames.mediaUrlFor(record.camera),
+        feedType,
+        {
+          onFailure: () => {
+            if (runtime.disposed) return;
+            runtime.video = null;
+            runtime.mode = 'image';
+            runtime.image = new Image();
+            runtime.image.decoding = 'async';
+            runtime.image.onload = () => {
+              runtime.imageLoading = false;
+              runtime.imageReady = true;
+              runtime.imageStamp = Date.now();
+            };
+            runtime.image.onerror = () => {
+              runtime.imageLoading = false;
+              runtime.imageReady = false;
+            };
+            runtime.planeMaterial.image = runtime.canvas;
+            parts.frames.refreshProjectionImage(record, true);
+            parts.presentation.notifyListeners();
+          },
         },
-      });
+      );
     } else {
       const img = new Image();
       img.decoding = 'async';
@@ -294,7 +306,8 @@ export function createProjection({
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
-    if (record.projection && !record.projection.disposed) return record.projection;
+    if (record.projection && !record.projection.disposed)
+      return record.projection;
     const runtime = createProjectionRuntime(record);
     record.projection = runtime;
     if (runtime) {
@@ -314,7 +327,11 @@ export function createProjection({
     runtime.disposed = true;
     runtime.playback?.dispose();
     runtime.playback = null;
-    if (runtime.image) { runtime.image.onload = null; runtime.image.onerror = null; runtime.image.src = ''; }
+    if (runtime.image) {
+      runtime.image.onload = null;
+      runtime.image.onerror = null;
+      runtime.image.src = '';
+    }
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');
@@ -392,16 +409,15 @@ export function createProjection({
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
       if (!record.projection?.video) continue;
-      if (
-        record.camera.id === activeId &&
-        layerState._enabled
-      ) {
+      if (record.camera.id === activeId && layerState._enabled) {
         record.projection.video.play().catch(() => {});
       } else {
         const runtime = record.projection;
         destroyProjectionRuntime(runtime);
         record.projection = null;
-        layerState._projectionEntities = layerState._projectionEntities.filter((entry) => entry !== runtime);
+        layerState._projectionEntities = layerState._projectionEntities.filter(
+          (entry) => entry !== runtime,
+        );
       }
     }
   }

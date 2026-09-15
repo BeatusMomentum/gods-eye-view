@@ -169,14 +169,19 @@ export function _renderCctvState(state) {
   if (this._cctvVideo) {
     this._cctvVideo.hidden = !liveIntent;
     if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
-    const visible = liveIntent && !document.hidden && !this._cctvPanel?.classList.contains('collapsed');
+    const visible =
+      liveIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed');
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;
     }
     this._cctvVideoCameraId = activeId;
     if (visible && !this._cctvVideoSurface) {
-      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () => this.cctv.getActiveVideoElement?.());
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () =>
+        this.cctv.getActiveVideoElement?.(),
+      );
     }
   }
 
