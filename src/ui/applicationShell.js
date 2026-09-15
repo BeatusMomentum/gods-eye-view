@@ -98,6 +98,7 @@ export class StyleManager {
       satellitesLayer,
       cctvLayer,
       bikeshareLayer,
+      transitLayer,
       aisLiveVesselsLayer,
       militaryAwarenessLayer,
       cachedGroundFloor,
@@ -171,6 +172,7 @@ export class StyleManager {
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
       getDataManager: () => this._dataManager,
       stopOrbit: () => this._stopOrbit(),
+      cancelOrientation: () => this._cameraOrientationControls?.cancel(),
       showToast: (text) => this._showToast(text),
     });
     this._shareRestoration = new ShareRestoration({
@@ -569,6 +571,7 @@ export class StyleManager {
         satellitesLayer,
         cctvLayer,
         bikeshareLayer,
+        transitLayer,
         aisLiveVesselsLayer,
       ],
       (modeLabel) => {
@@ -3281,7 +3284,7 @@ export class StyleManager {
         northButton: this._northUpBtn,
       },
       runNavigation: (noun, navigate) =>
-        this._runExplicitNavigation(noun, navigate),
+        this._navigation.runOrientation(noun, navigate),
       showToast: (message) => this._showToast(message),
     });
   }

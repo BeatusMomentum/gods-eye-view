@@ -1,5 +1,51 @@
 # Changelog
 
+- Separate map-feature acquisition from annotation/search selection. Move road and mapped-installation decoding into source adapters while preserving geometry policy, cancellation, retry outcomes and compatibility exports.
+
+- Cancel hidden Nepal provider preloads on Stop, event disable and replacement, and respect drawing-tool pointer ownership for fallback evidence cards. Preserve @manjunath22466’s Nepal scene contribution and source attribution.
+
+- Cancel the Nepal Upper Valley locator's pending approach and orbit on scene Stop, replacement, seek, and teardown; late camera callbacks cannot take over a newer shot.
+
+- Keep completed flood history visible when later Nepal media-only shots arrive and reveal their source cards.
+- Reconcile an already-playing Nepal video when the YouTube API attaches, so missed playback notifications cannot truncate the seven-second clip or replay an already-ended clip.
+
+- Clamp the Nepal flood trail and surge marker to the active terrain or photoreal surface so refined 3D tiles cannot bury the path.
+
+- Preserve Nepal shot camera and map ownership through the public layer lifecycle; passive restoration does not start standalone playback.
+
+- Separate transit snapshot/history acquisition from the layer and expose its bounded request service independently of Vite. Preserve feed selection, playback, cache policy and compatibility exports.
+
+- Widen opaque sensor halos to 3 display pixels with a 30 px fleet core while retaining at least 60% opaque core coverage, adding contrast margin through thermal blur and bloom on bright roofs.
+
+- Exclude Noir's intentionally vignetted outer field from transit core measurements and add separate Boston live oblique selection/readability coverage.
+
+- Judge NVG transit readability by phosphor peak and halo contrast, use opaque black sensor halos, reject overlapping pixel samples, and report each selected-trail acceptance condition. Simplify transit source credits and ground-placement wording.
+
+- Reserve numeric playback scratch before sampling, including resolved transit surface heights, and reuse the same output and segment objects on every frame.
+
+- Keep moving and stationary transit above CCTV/Bikeshare consistently, and share camera sensitivity across the actual Traffic, Bikeshare and Transit lifecycles.
+
+- Reject isolated transit history outliers without changing the active playback bracket; rejected live reports retain the last accepted route, mode and detection text.
+
+- Isolate optional scene-card presentation callbacks from the shared overlay projection path, preserving ordinary-layer allocation budgets and recovering from failed animation callbacks.
+
+- Rename scene shots inline with a double-click; Enter or focus loss saves, and Escape cancels.
+- Stop scene playback and delayed media when its event layer is explicitly closed; reject stale seek and replay completions. Ship only the Nepal incident default, without a separate reconstruction recipe.
+
+- Keep Nepal flood and locator components available through Scenes without separate entries in Data Layers.
+
+- Start the shared Nepal flood route at the Debris-Dammed Lake river reach, removing the earlier upstream section from overview paths.
+
+- Remove the redundant WITNESS panel shortcut; retain per-shot source media and Open Original links.
+
+- Follow the Mailung Bazzar, Dandaguan video's source clock through 0:07 and advance after its brief fade-out, including older saved scenes. Bound delayed or blocked playback and cancel late provider callbacks on Stop or replacement.
+
+- Keep the completed flood trail visible during the Debris-Dammed Lake to Second landslide camera handoff, without revealing the next reach early.
+
+- Preserve loaded base imagery when successive scene shots use the same provider, avoiding a bare-globe flash at shot handoffs.
+
+- Add the Nepal Flood Incident scene with geographic labels, synchronized event controls, linked witness sources, and Vantor comparison imagery over Esri. Nepal uses Google 3D when available and falls back to Esri with keyless terrain without rewriting saved shots. Bundled event imagery and derived data retain their separate non-commercial terms.
+
 - Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
 
 - Expose reference feed factories independently of standalone catalog construction; preserve source choices and asset attribution.
@@ -7,6 +53,7 @@
 - Add source-only layer exports and enforce source, browser, standalone and voice import directions. Move plain record/feed helpers and settings filesystem hardening to their owners while preserving compatibility and behavior.
 
 - Separate voice session lifetime and common controls from the default Realtime protocol adapter.
+- Add live public transit: vehicles from seven open GTFS-Realtime feeds played back a lag behind real time at their reported speed, a selected-vehicle trail with bounded MBTA history caching, mode-coloured detection brackets in every preset, and sprites that stay readable in night-vision and thermal views.
 - Separate canonical voice action arguments from descriptive wording, preserving the existing Realtime tool inventory.
 
 - Expose portable radio, camera-type and regional source helpers; keep HTTP transport separate from record normalization.
@@ -228,6 +275,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   address grid — so headings use the shared id-hash fallback at low confidence
   and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
   the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+- **Transit layer** — keyless buses, trams, subways, trains and ferries in
+  Boston, Austin, Minneapolis–St Paul, Helsinki, the Netherlands, Norway and
+  South East Queensland. Vehicles use delayed timestamp playback and explicit
+  waiting states. Selection shows available recent history, mode-coloured cards
+  and clear report ages; MBTA history can survive a browser reload while the
+  proxy remains running. Heights are aligned to work with Google 3D tiles.
+  Subways are projected to street level and their cards explain that choice.
+  Visible animation, detection membership, history storage and proxy requests
+  are bounded. Share links carry Transit as token `j`.
 
 - Add a keyless **Wind** layer from NOAA GFS 10 m wind (#459, thanks @beneduzi). The `/api/wind` proxy
   byte-range fetches only the UGRD/VGRD GRIB2 messages from the public AWS bucket,
