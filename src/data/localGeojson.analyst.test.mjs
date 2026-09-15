@@ -2,10 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import {
-  createLocalGeoJsonLayer,
-  mapAnalystRecord,
-} from './localGeojson.js';
+import { createLocalGeoJsonLayer, mapAnalystRecord } from './localGeojson.js';
 
 const DC_RAW = {
   id: '1176042553',
@@ -63,12 +60,15 @@ test('infra analyst record: dam maps name, operator, river, output; names stay u
 });
 
 test('infra analyst record: unnamed feature falls back to source id', () => {
-  const r = mapAnalystRecord({
-    id: 'dc-42',
-    lat: 30.2,
-    lon: -97.7,
-    properties: { tags: { operator: 'Example Cloud' } },
-  }, 'local-datacenters');
+  const r = mapAnalystRecord(
+    {
+      id: 'dc-42',
+      lat: 30.2,
+      lon: -97.7,
+      properties: { tags: { operator: 'Example Cloud' } },
+    },
+    'local-datacenters',
+  );
   assert.equal(r.id, 'dc-42');
   assert.equal(r.name, null);
   assert.equal(r.operator, 'Example Cloud');
@@ -79,16 +79,20 @@ test('infra analyst record: empty record yields nulls, never NaN/undefined', () 
   assert.equal(r.id, 'Dam');
   for (const [key, value] of Object.entries(r)) {
     assert.notEqual(value, undefined, `${key} must not be undefined`);
-    if (typeof value === 'number') assert.ok(Number.isFinite(value), `${key} must not be NaN`);
+    if (typeof value === 'number')
+      assert.ok(Number.isFinite(value), `${key} must not be NaN`);
   }
 });
 
 test('infra analyst record: output is JSON-safe (no Cesium types leak)', () => {
-  const r = mapAnalystRecord({
-    ...DAM_RAW,
-    entity: {},
-    position: { x: 1 },
-  }, 'local-dams');
+  const r = mapAnalystRecord(
+    {
+      ...DAM_RAW,
+      entity: {},
+      position: { x: 1 },
+    },
+    'local-dams',
+  );
   assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
   assert.equal('entity' in r, false);
   assert.equal('position' in r, false);
@@ -112,25 +116,37 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    text: async () => JSON.stringify({
-      type: 'Feature',
-      id: 'runtime-dam',
-      properties: {
-        name: 'Runtime Dam',
-        output: '12 MW',
-        tags: { associated_river: 'Test River', operator: 'Test Hydro' },
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[-97.70, 30.20], [-97.69, 30.20], [-97.69, 30.21], [-97.70, 30.20]]],
-      },
-    }),
+    text: async () =>
+      JSON.stringify({
+        type: 'Feature',
+        id: 'runtime-dam',
+        properties: {
+          name: 'Runtime Dam',
+          output: '12 MW',
+          tags: { associated_river: 'Test River', operator: 'Test Hydro' },
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [-97.7, 30.2],
+              [-97.69, 30.2],
+              [-97.69, 30.21],
+              [-97.7, 30.2],
+            ],
+          ],
+        },
+      }),
   });
   const viewer = {
     selectedEntity: undefined,
     dataSources: {
-      add(dataSource) { return dataSource; },
-      remove() { return true; },
+      add(dataSource) {
+        return dataSource;
+      },
+      remove() {
+        return true;
+      },
     },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
@@ -142,9 +158,13 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
       canvas: { clientWidth: 800, clientHeight: 600 },
       preRender: new MockLayerEvent(),
       sampleHeightSupported: false,
-      sampleHeight() { return undefined; },
+      sampleHeight() {
+        return undefined;
+      },
       screenSpaceCameraController: { enableInputs: true },
-      pick() { return null; },
+      pick() {
+        return null;
+      },
       requestRender() {},
     },
   };
@@ -155,10 +175,17 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     color: '#0088ff',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
     projectToWindow: () => ({ x: 400, y: 300 }),
-    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+    screenSpaceEventHandlerFactory: () => ({
+      setInputAction() {},
+      destroy() {},
+    }),
   });
   try {
-    assert.deepEqual(layer.getAnalystRecords(), [], 'unenabled layer has no analyst records');
+    assert.deepEqual(
+      layer.getAnalystRecords(),
+      [],
+      'unenabled layer has no analyst records',
+    );
     await layer.enable(viewer);
     const rows = layer.getAnalystRecords();
     assert.equal(rows.length, 1);
@@ -169,13 +196,25 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     assert.equal(rows[0].output, '12 MW');
     assert.ok(Number.isFinite(rows[0].lat) && Number.isFinite(rows[0].lon));
     assert.deepEqual(JSON.parse(JSON.stringify(rows[0])), rows[0]);
-    assert.equal(layer.getAnalystRecords(0).length, 1, 'non-finite/zero cap still returns at least one');
+    assert.equal(
+      layer.getAnalystRecords(0).length,
+      1,
+      'non-finite/zero cap still returns at least one',
+    );
 
     layer.disable(viewer);
-    assert.deepEqual(layer.getAnalystRecords(), [], 'disable keeps stems but analyst snapshot is empty');
+    assert.deepEqual(
+      layer.getAnalystRecords(),
+      [],
+      'disable keeps stems but analyst snapshot is empty',
+    );
   } finally {
     layer.destroy(viewer);
-    assert.deepEqual(layer.getAnalystRecords(), [], 'destroy releases analyst records');
+    assert.deepEqual(
+      layer.getAnalystRecords(),
+      [],
+      'destroy releases analyst records',
+    );
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
