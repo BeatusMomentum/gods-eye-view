@@ -30,8 +30,8 @@ export function keylessHudSummaryResponse(apiKey) {
 export function isHudSummaryUnconfigured(status, data) {
   const keys =
     data !== null && typeof data === 'object' && !Array.isArray(data)
-    ? Object.keys(data)
-    : [];
+      ? Object.keys(data)
+      : [];
   return (
     keys.length === 4 &&
     status === 200 &&
@@ -93,7 +93,9 @@ export function hudTelemetryProvenanceTag(layers = [], options) {
   const envelope = feedProvenanceEnvelope(snapshots, options);
   if (!envelope.overall || envelope.overall === 'nominal') return null;
   const names = envelope.layers
-    .filter((s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off')
+    .filter(
+      (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
+    )
     .map((s) => String(s.name || s.id || 'LAYER').toUpperCase())
     .slice(0, 2);
   return `${envelope.overall.toUpperCase()}${names.length ? ` ${names.join('/')}` : ''}`;
@@ -103,5 +105,8 @@ export function hudTelemetryProvenanceTag(layers = [], options) {
 export function hudSummaryMatchesProvenance(summary, provenance) {
   const state = provenance?.overall;
   if (!state || state === 'nominal' || state === 'off') return true;
-  return String(summary || '').toUpperCase().split(/\W+/).includes(String(state).toUpperCase());
+  return String(summary || '')
+    .toUpperCase()
+    .split(/\W+/)
+    .includes(String(state).toUpperCase());
 }

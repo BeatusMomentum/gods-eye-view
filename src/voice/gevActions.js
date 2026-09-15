@@ -1,4 +1,8 @@
-import { layerSnapshot, layerSnapshots, feedProvenanceEnvelope } from '../data/layerSnapshot.js';
+import {
+  layerSnapshot,
+  layerSnapshots,
+  feedProvenanceEnvelope,
+} from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
@@ -300,7 +304,7 @@ function cachesFor(service) {
     service.signal?.addEventListener(
       'abort',
       () => {
-      for (const cache of Object.values(caches)) cache.clear();
+        for (const cache of Object.values(caches)) cache.clear();
       },
       { once: true },
     );
@@ -519,16 +523,16 @@ export function createGevActionRunner({
         ...(args.locationQuery ? { query: args.locationQuery } : {}),
         ...(hasCoordinates
           ? {
-          latitude: Number(args.latitude),
-          longitude: Number(args.longitude),
+              latitude: Number(args.latitude),
+              longitude: Number(args.longitude),
             }
           : {}),
       };
       const layer = await runGevAction(
         'set_layer_visibility',
         {
-        layerId,
-        enabled: true,
+          layerId,
+          enabled: true,
         },
         runOptions,
       );
@@ -712,10 +716,10 @@ export function createGevActionRunner({
       }
       const cancellationState = () =>
         withContextModeVocabulary(
-        typeof styleManager.getContextModeState === 'function'
-          ? styleManager.getContextModeState()
-          : {},
-      );
+          typeof styleManager.getContextModeState === 'function'
+            ? styleManager.getContextModeState()
+            : {},
+        );
       if (!current()) {
         return {
           ok: false,
@@ -731,8 +735,8 @@ export function createGevActionRunner({
       const result = await styleManager.setContextMode(
         mode === 'off' ? null : mode,
         {
-        signal: runOptions.signal,
-        isCurrent: runOptions.isCurrent,
+          signal: runOptions.signal,
+          isCurrent: runOptions.isCurrent,
         },
       );
       if (!current() && result?.ok !== true) {
@@ -803,8 +807,8 @@ export function createGevActionRunner({
         rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
         const contextState =
           typeof styleManager.getContextModeState === 'function'
-          ? styleManager.getContextModeState()
-          : {};
+            ? styleManager.getContextModeState()
+            : {};
         priorContextMode = contextState?.mode || null;
         const contactsReady =
           contextState?.mode === 'flights' &&
@@ -824,8 +828,8 @@ export function createGevActionRunner({
           if (contextResult?.ok !== true || !current()) {
             const contextRollback = contextChangedForEntry
               ? await styleManager.setContextMode(priorContextMode, {
-                claimVisualAuthority: false,
-              })
+                  claimVisualAuthority: false,
+                })
               : null;
             return {
               ok: false,
@@ -873,12 +877,12 @@ export function createGevActionRunner({
         const contextRollback = await styleManager.setContextMode(
           priorContextMode,
           {
-          // Undoing this action's own precondition — still choreography.
-          claimVisualAuthority: false,
+            // Undoing this action's own precondition — still choreography.
+            claimVisualAuthority: false,
             ...(current()
               ? {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
+                  signal: runOptions.signal,
+                  isCurrent: runOptions.isCurrent,
                 }
               : {}),
           },
@@ -896,8 +900,8 @@ export function createGevActionRunner({
       setPanelOpen(styleManager, 'data-panel', true);
       const focusedLayer =
         layerId && dataManager.layers.has(layerId)
-        ? focusDataLayerRow(layerId)
-        : null;
+          ? focusDataLayerRow(layerId)
+          : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
@@ -907,10 +911,10 @@ export function createGevActionRunner({
           .getAll()
           .filter((layer) => layer.showInTogglePanel !== false)
           .map((layer) => ({
-          id: layer.id,
-          name: layer.name,
-          enabled: layer.enabled,
-          count: layer.stats?.count || 0,
+            id: layer.id,
+            name: layer.name,
+            enabled: layer.enabled,
+            count: layer.stats?.count || 0,
           })),
       };
     }
@@ -924,16 +928,16 @@ export function createGevActionRunner({
           typeof styleManager?.runImmediateLocationNavigation === 'function'
             ? (navigate) =>
                 styleManager.runImmediateLocationNavigation(navigate)
-          : null,
+            : null,
         beginDeferred:
           typeof styleManager?.beginDeferredLocationNavigation === 'function'
-          ? () => styleManager.beginDeferredLocationNavigation()
-          : null,
+            ? () => styleManager.beginDeferredLocationNavigation()
+            : null,
         reassertDeferred:
           typeof styleManager?.reassertDeferredLocationNavigation === 'function'
             ? (generation) =>
                 styleManager.reassertDeferredLocationNavigation(generation)
-          : null,
+            : null,
         onStart: () => {
           if (typeof styleManager?.beginLocationNavigation === 'function') {
             styleManager.beginLocationNavigation();
@@ -1180,8 +1184,8 @@ function sanitizeAnnotationSpec(spec) {
     out.points = out.points
       .slice(0, MAX_ROUTE_POINTS)
       .map((p) =>
-      p && typeof p === 'object' && typeof p.target === 'string'
-        ? { ...p, target: clampStr(p.target, MAX_TARGET_LEN) }
+        p && typeof p === 'object' && typeof p.target === 'string'
+          ? { ...p, target: clampStr(p.target, MAX_TARGET_LEN) }
           : p,
       );
   }
@@ -1644,8 +1648,8 @@ export async function controlRadio(
   // viewport's nearest station.
   const action =
     requestedAction === 'play' && hasSelectionCriteria
-    ? 'select'
-    : requestedAction;
+      ? 'select'
+      : requestedAction;
 
   const readRadioLifecycle = () =>
     readLayerLifecycleSummary(dataManager, 'radio');
@@ -1666,11 +1670,11 @@ export async function controlRadio(
   const intentSummary = () =>
     lastIntentOutcome
       ? {
-    phase: lastIntentOutcome.phase,
-    cancellationReason: lastIntentOutcome.cancellationReason || null,
-    successorIntentEpoch: lastIntentOutcome.successorIntentEpoch ?? null,
-    successorEnabled: lastIntentOutcome.successorEnabled ?? null,
-    successorOrigin: lastIntentOutcome.successorOrigin ?? null,
+          phase: lastIntentOutcome.phase,
+          cancellationReason: lastIntentOutcome.cancellationReason || null,
+          successorIntentEpoch: lastIntentOutcome.successorIntentEpoch ?? null,
+          successorEnabled: lastIntentOutcome.successorEnabled ?? null,
+          successorOrigin: lastIntentOutcome.successorOrigin ?? null,
         }
       : {};
 
@@ -1832,7 +1836,7 @@ export async function controlRadio(
             { volume: volumePct / 100 },
             { origin: 'voice' },
           )
-      : radio.setVolume(volumePct / 100);
+        : radio.setVolume(volumePct / 100);
     if (volumeApplied === false) {
       return {
         ok: false,
@@ -1970,12 +1974,12 @@ export async function controlRadio(
     if (!radioActionIsCurrent(options)) return cancelled(summarize);
     const station = radio.selectRequestedStation?.(
       {
-      categoryId: String(args.category || 'all'),
-      anchor: location ? { lat: location.lat, lon: location.lon } : null,
-      country: normalizedCountry.empty
-        ? String(location?.country || '')
-        : normalizedCountry.code,
-      stationQuery: String(args.stationQuery || ''),
+        categoryId: String(args.category || 'all'),
+        anchor: location ? { lat: location.lat, lon: location.lon } : null,
+        country: normalizedCountry.empty
+          ? String(location?.country || '')
+          : normalizedCountry.code,
+        stationQuery: String(args.stationQuery || ''),
       },
       { autoplay: false },
     );
@@ -2097,23 +2101,23 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
       'fire',
       'track_entity',
       () => {
-      flyToLandmark(viewer, strongest.latitude, strongest.longitude, {
+        flyToLandmark(viewer, strongest.latitude, strongest.longitude, {
           range: 14000,
           pitch: -50,
           heading: 0,
           buildingHeight: 0,
           duration: 2.2,
-      });
-      return {
+        });
+        return {
           ok: true,
           action: 'track_entity',
           kind: 'fire',
           layerId: 'local-firms',
-        label: strongest.label || 'Strongest fire',
+          label: strongest.label || 'Strongest fire',
           latitude: strongest.latitude,
           longitude: strongest.longitude,
-        frp: strongest.frp ?? null,
-      };
+          frp: strongest.frp ?? null,
+        };
       },
     );
   }
@@ -2152,39 +2156,39 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
       family.kind,
       'track_entity',
       () => {
-      let trackedOk = false;
-      if (family.kind === 'vessel') {
-        trackedOk = !!module.selectById?.(found.mmsi);
-        flyToLandmark(viewer, found.latitude, found.longitude, {
+        let trackedOk = false;
+        if (family.kind === 'vessel') {
+          trackedOk = !!module.selectById?.(found.mmsi);
+          flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
             heading: 0,
             buildingHeight: 0,
             duration: 2.0,
-        });
-      } else if (family.kind === 'satellite') {
-        trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
-      } else {
-        trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
-      }
+          });
+        } else if (family.kind === 'satellite') {
+          trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
+        } else {
+          trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
+        }
 
-      return {
-        ok: trackedOk,
-        action: 'track_entity',
-        layerId: family.layerId,
-        kind: family.kind,
-        // Aircraft follow the flight layers' label convention (callsign →
-        // registration → icao24) so the spoken name matches what the UI shows;
-        // `registration` is absent on vessels/satellites and simply falls
-        // through to their own name/id links.
-        label: formatTrackedEntityLabel(found, query),
-        latitude: found.latitude ?? null,
-        longitude: found.longitude ?? null,
+        return {
+          ok: trackedOk,
+          action: 'track_entity',
+          layerId: family.layerId,
+          kind: family.kind,
+          // Aircraft follow the flight layers' label convention (callsign →
+          // registration → icao24) so the spoken name matches what the UI shows;
+          // `registration` is absent on vessels/satellites and simply falls
+          // through to their own name/id links.
+          label: formatTrackedEntityLabel(found, query),
+          latitude: found.latitude ?? null,
+          longitude: found.longitude ?? null,
           altitudeM: Number.isFinite(found.altitudeM)
             ? Math.round(found.altitudeM)
             : null,
-        error: trackedOk ? null : 'Match found but tracking failed',
-      };
+          error: trackedOk ? null : 'Match found but tracking failed',
+        };
       },
     );
   }
@@ -2337,40 +2341,40 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
     'frame',
     'frame_overhead',
     () => {
-    viewer.camera.flyToBoundingSphere(sphere, {
-      duration: 2.0,
+      viewer.camera.flyToBoundingSphere(sphere, {
+        duration: 2.0,
         offset: new Cesium.HeadingPitchRange(
           viewer.camera.heading,
           pitch,
           sphere.radius * 2.4,
         ),
-    });
+      });
 
-    let detectionEnabled = false;
-    try {
-      const detectionState = styleManager?.getDetectionState?.();
-      if (detectionState?.detectionMode === 'OFF') {
-        const detectionResult = styleManager.setDetection({ mode: 'dense' });
-        detectionEnabled = detectionResult?.ok === true;
-      } else if (detectionState) {
-        detectionEnabled = true;
+      let detectionEnabled = false;
+      try {
+        const detectionState = styleManager?.getDetectionState?.();
+        if (detectionState?.detectionMode === 'OFF') {
+          const detectionResult = styleManager.setDetection({ mode: 'dense' });
+          detectionEnabled = detectionResult?.ok === true;
+        } else if (detectionState) {
+          detectionEnabled = true;
+        }
+      } catch {
+        // detection facade unavailable; framing still succeeded
       }
-    } catch {
-      // detection facade unavailable; framing still succeeded
-    }
 
-    return {
-      ok: true,
-      action: 'frame_overhead',
-      layerId,
-      radiusKm: Math.round(radiusKm),
-      count: entries.length,
-      detectionEnabled,
-      nearest: entries.slice(0, 5).map((entry) => ({
-        id: entry.id || entry.icao24 || entry.mmsi || null,
-        label: entry.label || entry.callsign || entry.name || null,
-      })),
-    };
+      return {
+        ok: true,
+        action: 'frame_overhead',
+        layerId,
+        radiusKm: Math.round(radiusKm),
+        count: entries.length,
+        detectionEnabled,
+        nearest: entries.slice(0, 5).map((entry) => ({
+          id: entry.id || entry.icao24 || entry.mmsi || null,
+          label: entry.label || entry.callsign || entry.name || null,
+        })),
+      };
     },
   );
 }
@@ -2491,8 +2495,8 @@ export async function getBasemapLabelContext(
     ]).slice(0, 16),
     nearbyPlaceLabels: uniqueStrings(
       (nearbyPlaces || []).flatMap((nearbyPlace) => [
-      nearbyPlace.name,
-      nearbyPlace.address,
+        nearbyPlace.name,
+        nearbyPlace.address,
       ]),
     ).slice(0, 24),
   };
@@ -2661,7 +2665,8 @@ function nextIssPass(viewer, dataManager, args) {
     peakElevationDeg: Math.round(pass.maxElevDeg),
     riseDirection: compassDir(pass.riseAzDeg),
     visible: typeof pass.visible === 'boolean' ? pass.visible : null,
-    visibilityNote: 'Geometric illumination estimate only; weather, brightness and orbital-element age affect actual visibility.',
+    visibilityNote:
+      'Geometric illumination estimate only; weather, brightness and orbital-element age affect actual visibility.',
     setIso: new Date(pass.setMs).toISOString(),
     peakIso: new Date(pass.maxElevMs).toISOString(),
   };
@@ -2669,22 +2674,55 @@ function nextIssPass(viewer, dataManager, args) {
 
 function nextSatellitePass(viewer, dataManager, args) {
   const layer = dataManager?.layers?.get('satellites')?.module;
-  const identity = layer?.resolveSatelliteForPass?.(args.target) || { status: 'not-found' };
-  if (identity.status !== 'ok') return {
-    ok: false, action: 'next_satellite_pass', ...identity,
-    error: identity.status === 'ambiguous' ? 'Several loaded satellites match. Choose a NORAD ID from candidates.' : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
+  const identity = layer?.resolveSatelliteForPass?.(args.target) || {
+    status: 'not-found',
   };
+  if (identity.status !== 'ok')
+    return {
+      ok: false,
+      action: 'next_satellite_pass',
+      ...identity,
+      error:
+        identity.status === 'ambiguous'
+          ? 'Several loaded satellites match. Choose a NORAD ID from candidates.'
+          : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
+    };
   // Reuse the legacy location fallback and result formatting, substituting only
   // this explicitly resolved catalog identity and the optional visibility filter.
-  const adapter = { layers: new Map([['satellites', { module: {
-    getNextIssPass: (options) => layer.getNextSatellitePass(identity.noradId, { ...options, requireVisible: args.visibleOnly === true }),
-  } }]]) };
+  const adapter = {
+    layers: new Map([
+      [
+        'satellites',
+        {
+          module: {
+            getNextIssPass: (options) =>
+              layer.getNextSatellitePass(identity.noradId, {
+                ...options,
+                requireVisible: args.visibleOnly === true,
+              }),
+          },
+        },
+      ],
+    ]),
+  };
   const result = nextIssPass(viewer, adapter, args);
   if (result.error) {
-    result.error = result.error.replace(/ISS/g, identity.name || String(identity.noradId));
-    if (args.visibleOnly === true) result.error += ' Search required estimated illumination under a dark sky.';
+    result.error = result.error.replace(
+      /ISS/g,
+      identity.name || String(identity.noradId),
+    );
+    if (args.visibleOnly === true)
+      result.error +=
+        ' Search required estimated illumination under a dark sky.';
   }
-  return { ...result, action: 'next_satellite_pass', noradId: identity.noradId, name: identity.name, visibleOnly: args.visibleOnly === true, horizonHours: 24 };
+  return {
+    ...result,
+    action: 'next_satellite_pass',
+    noradId: identity.noradId,
+    name: identity.name,
+    visibleOnly: args.visibleOnly === true,
+    horizonHours: 24,
+  };
 }
 
 function normalizePanelId(value) {
@@ -2716,21 +2754,21 @@ function normalizeCockpitNavigationHints(rawAction) {
 
   const targetLayer =
     raw.includes('vessel') || raw.includes('ship') || raw.includes('ais')
-    ? 'ais-live-vessels'
+      ? 'ais-live-vessels'
       : raw.includes('installation') ||
           raw.includes('facility') ||
           raw.includes('base')
-      ? 'military-installations'
-      : raw.includes('military')
-        ? 'military'
-        : null;
+        ? 'military-installations'
+        : raw.includes('military')
+          ? 'military'
+          : null;
 
   const aircraftClass =
     raw.includes('helicopter') ||
     raw.includes('helo') ||
     raw.includes('chopper')
-    ? 'helicopter'
-    : null;
+      ? 'helicopter'
+      : null;
 
   return {
     targetLayer,
@@ -2839,10 +2877,10 @@ async function flyToRequestedLocation(
     placeSearch = unavailablePlaceSearch,
     searchNavigation = searchAndFlyTo,
     signal,
-  onStart = null,
-  runImmediate = null,
-  beginDeferred = null,
-  reassertDeferred = null,
+    onStart = null,
+    runImmediate = null,
+    beginDeferred = null,
+    reassertDeferred = null,
   } = {},
 ) {
   const requestedRangeM = Number(args.rangeM);
@@ -2865,11 +2903,11 @@ async function flyToRequestedLocation(
       ? new Promise((resolve) => {
           settleArrival = resolve;
         })
-    : null;
+      : null;
   const arrivalHooks = arrival
     ? {
-    onComplete: () => settleArrival?.('arrived'),
-    onCancel: () => settleArrival?.('cancelled'),
+        onComplete: () => settleArrival?.('arrived'),
+        onCancel: () => settleArrival?.('cancelled'),
       }
     : {};
   const afterArrival = async (result, label) => {
@@ -2884,12 +2922,12 @@ async function flyToRequestedLocation(
   if (locationId) {
     const result = immediate(() =>
       flyToPresetLocation(viewer, locationId, {
-      ...(rangeM || args.viewMode === 'close'
-        ? { range: rangeM || 250 }
-        : { viewMode: 'overview' }),
-      duration: 2.2,
-      onStart: immediateOnStart,
-      ...arrivalHooks,
+        ...(rangeM || args.viewMode === 'close'
+          ? { range: rangeM || 250 }
+          : { viewMode: 'overview' }),
+        duration: 2.2,
+        onStart: immediateOnStart,
+        ...arrivalHooks,
       }),
     );
     if (result === false)
@@ -2914,13 +2952,13 @@ async function flyToRequestedLocation(
   if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
     const result = immediate(() =>
       flyToLandmark(viewer, latitude, longitude, {
-      range: rangeM || 250,
-      pitch: -35,
-      heading: 0,
-      buildingHeight: 0,
-      duration: 2.2,
-      onStart: immediateOnStart,
-      ...arrivalHooks,
+        range: rangeM || 250,
+        pitch: -35,
+        heading: 0,
+        buildingHeight: 0,
+        duration: 2.2,
+        onStart: immediateOnStart,
+        ...arrivalHooks,
       }),
     );
     if (result === false)
@@ -2946,10 +2984,10 @@ async function flyToRequestedLocation(
     if (poiMatch) {
       const result = immediate(() =>
         flyToPOI(viewer, poiMatch.cityId, poiMatch.index, {
-        duration: 2.2,
-        onStart: immediateOnStart,
-        ...arrivalHooks,
-        ...(rangeM ? { range: rangeM } : {}),
+          duration: 2.2,
+          onStart: immediateOnStart,
+          ...arrivalHooks,
+          ...(rangeM ? { range: rangeM } : {}),
         }),
       );
       const poi = CITY_POIS[poiMatch.cityId]?.pois?.[poiMatch.index];
@@ -3029,19 +3067,19 @@ function getCurrentViewState(
     style: styleManager.activeStyle || 'normal',
     context:
       typeof styleManager.getContextModeState === 'function'
-      ? {
-        ...withContextModeVocabulary(styleManager.getContextModeState()),
-        // The numbers on the operator's Contacts panel, so a window/count
-        // question can be answered from what they are looking at.
+        ? {
+            ...withContextModeVocabulary(styleManager.getContextModeState()),
+            // The numbers on the operator's Contacts panel, so a window/count
+            // question can be answered from what they are looking at.
             ...(activeContactsWindow(dataManager)
               ? { contactsWindow: activeContactsWindow(dataManager) }
               : {}),
-      }
-      : null,
+          }
+        : null,
     cockpit:
       typeof styleManager.getCockpitState === 'function'
-      ? styleManager.getCockpitState()
-      : null,
+        ? styleManager.getCockpitState()
+        : null,
     controls:
       typeof styleManager.getControlState === 'function'
         ? styleManager.getControlState()
@@ -3058,7 +3096,9 @@ function getCurrentViewState(
       source: layerSnapshot(layer).source,
       lastUpdate: layerSnapshot(layer).lastUpdate,
     })),
-    feedProvenance: feedProvenanceEnvelope(layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled)),
+    feedProvenance: feedProvenanceEnvelope(
+      layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled),
+    ),
   };
 }
 
@@ -3092,7 +3132,7 @@ async function getEntityContext(
           limit,
           target: viewTarget,
         })
-    : [];
+      : [];
   const scene = await scenePromise;
 
   if ((scope === 'selected' || scope === 'auto') && selected) {
@@ -3178,14 +3218,14 @@ function aircraftProximityWindowForQuery(dataManager, args, result) {
     items: items
       .slice(0, Math.round(clampNumber(args.limit, 1, 50, 12)))
       .map((item) => ({
-      layerKey: item.layerKey,
-      id: item.id,
-      ...(item.icao24 ? { icao24: item.icao24 } : {}),
-      ...(item.callsign ? { callsign: item.callsign } : {}),
+        layerKey: item.layerKey,
+        id: item.id,
+        ...(item.icao24 ? { icao24: item.icao24 } : {}),
+        ...(item.callsign ? { callsign: item.callsign } : {}),
         ...(Number.isFinite(item.distance)
           ? { distanceKm: Math.round(item.distance / 100) / 10 }
           : {}),
-    })),
+      })),
     summary: { count },
     coverage: {
       layersQueried: result?.coverage?.layersQueried || [],
@@ -3283,15 +3323,15 @@ function visibleEntityContexts(
     insertNearestRecord(
       nearbyRecords,
       {
-      record,
-      distanceScore: target
+        record,
+        distanceScore: target
           ? approximateCoordinateDistanceSq(
               targetLat,
               targetLon,
               record.latitude,
               record.longitude,
             )
-        : 0,
+          : 0,
       },
       VISIBLE_ENTITY_SHORTLIST,
     );
@@ -3448,16 +3488,16 @@ async function getBasemapContext(
   const cachedNearbyPlaces =
     shouldFetchNearbyPlaces(cameraHeightM) &&
     nearbyPlacesCache.has(nearbyCacheKey)
-    ? nearbyPlacesCache.get(nearbyCacheKey)
-    : null;
+      ? nearbyPlacesCache.get(nearbyCacheKey)
+      : null;
   const placePromise =
     shouldReverseGeocode(cameraHeightM) && !cachedPlace
-    ? reverseGeocode(latitude, longitude, service)
-    : Promise.resolve(cachedPlace);
+      ? reverseGeocode(latitude, longitude, service)
+      : Promise.resolve(cachedPlace);
   const nearbyPlacesPromise =
     shouldFetchNearbyPlaces(cameraHeightM) && !cachedNearbyPlaces
-    ? fetchNearbyPlaces(latitude, longitude, cameraHeightM, service)
-    : Promise.resolve(cachedNearbyPlaces);
+      ? fetchNearbyPlaces(latitude, longitude, cameraHeightM, service)
+      : Promise.resolve(cachedNearbyPlaces);
   const [viewportPlaces, resolvedPlace, resolvedNearbyPlaces] =
     await Promise.all([
       resolveWithin(
@@ -3465,13 +3505,13 @@ async function getBasemapContext(
         BASEMAP_CONTEXT_WAIT_MS,
         cachedViewportPlaces,
       ),
-    resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, cachedPlace),
+      resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, cachedPlace),
       resolveWithin(
         nearbyPlacesPromise,
         BASEMAP_CONTEXT_WAIT_MS,
         cachedNearbyPlaces,
       ),
-  ]);
+    ]);
   const place = resolvedPlace || fallbackPlace;
   const nearbyPlaces = resolvedNearbyPlaces || [];
   return {
@@ -3516,12 +3556,12 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
   const maxDistanceKm =
     cameraHeightM <= 5000
-    ? 2
-    : cameraHeightM <= 50000
-      ? 10
-      : cameraHeightM <= 250000
-        ? 35
-        : 0;
+      ? 2
+      : cameraHeightM <= 50000
+        ? 10
+        : cameraHeightM <= 250000
+          ? 35
+          : 0;
   if (maxDistanceKm <= 0) return [];
 
   const matches = [];
@@ -3752,9 +3792,9 @@ function inferCountry(latitude, longitude) {
   ];
   const region = regions.find(
     (item) =>
-    latitude >= item.south &&
-    latitude <= item.north &&
-    longitude >= item.west &&
+      latitude >= item.south &&
+      latitude <= item.north &&
+      longitude >= item.west &&
       longitude <= item.east,
   );
   return region?.name || null;
@@ -3802,18 +3842,18 @@ async function reverseGeocodeViewportSamples(samples, cameraHeightM, service) {
           sample.longitude,
           service,
         );
-    if (!place) return null;
-    return {
-      latitude: sample.latitude,
-      longitude: sample.longitude,
-      formattedAddress: place.formattedAddress,
-      locality: place.locality,
-      region: place.region,
-      country: place.country,
-      types: place.types,
-      labels: place.labels,
-      streetLabels: place.streetLabels,
-    };
+        if (!place) return null;
+        return {
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          formattedAddress: place.formattedAddress,
+          locality: place.locality,
+          region: place.region,
+          country: place.country,
+          types: place.types,
+          labels: place.labels,
+          streetLabels: place.streetLabels,
+        };
       }),
     )
   ).filter(Boolean);
@@ -3834,21 +3874,21 @@ function viewportPlacesFromCache(samples, cameraHeightM, service) {
       const place = reverseGeocodeCache.get(
         reverseGeocodeKey(sample.latitude, sample.longitude, service),
       );
-    if (!place) return [];
+      if (!place) return [];
       return [
         {
-      latitude: sample.latitude,
-      longitude: sample.longitude,
-      formattedAddress: place.formattedAddress,
-      locality: place.locality,
-      region: place.region,
-      country: place.country,
-      types: place.types,
-      labels: place.labels,
-      streetLabels: place.streetLabels,
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          formattedAddress: place.formattedAddress,
+          locality: place.locality,
+          region: place.region,
+          country: place.country,
+          types: place.types,
+          labels: place.labels,
+          streetLabels: place.streetLabels,
         },
       ];
-  });
+    });
   return summarizeViewportPlaces(places);
 }
 
@@ -4008,12 +4048,12 @@ function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
   const tags = props.tags || {};
   const label = cleanText(
     props.name ||
-    tags.name ||
-    tags['name:en'] ||
-    tags.official_name ||
-    tags.operator ||
-    props.operator ||
-    entity.name ||
+      tags.name ||
+      tags['name:en'] ||
+      tags.official_name ||
+      tags.operator ||
+      props.operator ||
+      entity.name ||
       layerTitle(layerId),
   );
   const position =
@@ -4073,8 +4113,8 @@ function unwrapProperties(value) {
   for (const [key, entry] of Object.entries(value)) {
     out[key] =
       entry && typeof entry.getValue === 'function'
-      ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-      : unwrapProperties(entry);
+        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
+        : unwrapProperties(entry);
   }
   return out;
 }
@@ -4189,10 +4229,15 @@ function analystProviders(
       const row = dataManager.getAll?.().find((layer) => layer.id === layerKey);
       if (row) return layerSnapshot(row);
       const module = dataManager.layers?.get(layerKey)?.module;
-      return layerSnapshot({ id: layerKey, enabled: dataManager.isEnabled?.(layerKey), stats: module?.getStats?.() || {} });
+      return layerSnapshot({
+        id: layerKey,
+        enabled: dataManager.isEnabled?.(layerKey),
+        stats: module?.getStats?.() || {},
+      });
     },
     getRecordCoverage(layerKey, rows) {
-      if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey)) return null;
+      if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey))
+        return null;
       const module = dataManager.layers.get(layerKey)?.module;
       const loaded = module?.getStats?.().count;
       return {
@@ -4271,7 +4316,36 @@ async function runAnalystQuery(
   // model burned the turn on retries (owner field session 2026-08-21, 23:48).
   const items = result.items.map((r) => {
     const compact = { layerKey: r.layerKey, id: r.id };
-    for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place', 'noradId', 'satelliteClass', 'group', 'river', 'output', 'capacity']) {
+    for (const k of [
+      'icao24',
+      'mmsi',
+      'registration',
+      'label',
+      'callsign',
+      'name',
+      'altitudeM',
+      'speedMps',
+      'speedKts',
+      'frp',
+      'magnitude',
+      'shipType',
+      'destination',
+      'operator',
+      'routeOrigin',
+      'routeDestination',
+      'aircraftClass',
+      'military',
+      'onGround',
+      'distanceKm',
+      'confidence',
+      'place',
+      'noradId',
+      'satelliteClass',
+      'group',
+      'river',
+      'output',
+      'capacity',
+    ]) {
       if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
     }
     return compact;
@@ -4305,10 +4379,22 @@ async function runAnalystQuery(
   // differ. The generic record/scope engine still owns explicit regions and
   // arbitrary points — only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
-  const entityWindow = aircraftProximityWindowForQuery(dataManager, args, result);
+  const entityWindow = aircraftProximityWindowForQuery(
+    dataManager,
+    args,
+    result,
+  );
   if (entityWindow) {
-    const provenance = feedProvenanceEnvelope(layerSnapshots(dataManager.getAll?.() || []).filter((layer) => layer.enabled && ['flights', 'military'].includes(layer.id)));
-    return { ...entityWindow, feedProvenance: provenance, feedState: provenance.overall };
+    const provenance = feedProvenanceEnvelope(
+      layerSnapshots(dataManager.getAll?.() || []).filter(
+        (layer) => layer.enabled && ['flights', 'military'].includes(layer.id),
+      ),
+    );
+    return {
+      ...entityWindow,
+      feedProvenance: provenance,
+      feedState: provenance.overall,
+    };
   }
 
   const contactsWindow = activeContactsWindow(dataManager);
@@ -4336,7 +4422,7 @@ async function runAnalystQuery(
         `${contactsWindow.radiusKm} km of ${contactsWindow.centeredOn}, and that is the answer to a bare ` +
         `"how many aircraft are nearby". This query measured something else — ${result.count} ${result.scopeLabel}. ` +
         'Give this one only if the operator asked about that specific area, and name both scopes if you give both.'
-    : null;
+      : null;
   return {
     ok: true,
     action: 'analyst_query',
@@ -4356,10 +4442,10 @@ async function runAnalystQuery(
     // missed inside a nested shape.
     ...(contactsWindow && aircraftQueried
       ? {
-        contactsWindow,
-        contactsWindowCount: windowAircraft,
-        contactsWindowSubject: contactsWindow.centeredOn || null,
-      }
+          contactsWindow,
+          contactsWindowCount: windowAircraft,
+          contactsWindowSubject: contactsWindow.centeredOn || null,
+        }
       : {}),
     ...(countsReconciliation ? { countsReconciliation } : {}),
   };
