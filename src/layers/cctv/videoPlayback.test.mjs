@@ -72,7 +72,7 @@ test('native HLS releases its client lease without response-header access', asyn
 test('finite video feeds retain looping while live HLS does not loop', async () => {
   for (const feedType of ['mp4', 'webm', 'hls']) {
     const source = video();
-    source.loop = true;
+    source.loop = feedType === 'hls';
     source.canPlayType = () => 'probably';
     let imports = 0;
     const playback = attachCctvVideo(source, '/api/cctv/media/a', feedType, {
