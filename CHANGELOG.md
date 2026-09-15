@@ -1,5 +1,9 @@
 # Changelog
 
+Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
+
+Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - Separate map-feature acquisition from annotation/search selection. Move road and mapped-installation decoding into source adapters while preserving geometry policy, cancellation, retry outcomes and compatibility exports.
 
 - Cancel hidden Nepal provider preloads on Stop, event disable and replacement, and respect drawing-tool pointer ownership for fallback evidence cards. Preserve @manjunath22466’s Nepal scene contribution and source attribution.
@@ -71,6 +75,13 @@
 - Let CLI tools, development launchers and the setup doctor use an explicit project directory while retaining their existing default paths.
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
+
+## Satellite pass prediction
+
+- Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.
+- Mark passes visible from Earth-shadow and civil-twilight checks.
+- Add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+- `next_iss_pass` retains the next geometric pass and adds visibility metadata. `next_satellite_pass` adds bounded loaded-catalog name/NORAD lookup and optional visible-only filtering (Rehaan Delmotra, #451; maintainer adaptation).
 
 ## Voice component boundaries
 
