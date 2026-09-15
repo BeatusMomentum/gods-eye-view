@@ -68,3 +68,26 @@ test('native HLS releases its client lease without response-header access', asyn
   assert.equal(releases[0].url, requested);
   assert.equal(releases[0].init.method, 'DELETE');
 });
+
+test('finite video feeds retain looping while live HLS does not loop', async () => {
+  for (const feedType of ['mp4', 'webm', 'hls']) {
+    const source = video();
+    source.loop = true;
+    source.canPlayType = () => 'probably';
+    let imports = 0;
+    const playback = attachCctvVideo(source, '/api/cctv/media/a', feedType, {
+      loadHls: async () => {
+        imports++;
+        return { default: { isSupported: () => false } };
+      },
+      fetchImpl: async () => {},
+    });
+    try {
+      await playback.ready;
+      assert.equal(source.loop, feedType !== 'hls');
+      assert.equal(imports, feedType === 'hls' ? 1 : 0);
+    } finally {
+      playback.dispose();
+    }
+  }
+});

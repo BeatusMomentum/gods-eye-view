@@ -9,6 +9,8 @@ export function attachCctvVideo(
     fetchImpl = globalThis.fetch,
   } = {},
 ) {
+  // Preserve replay for existing finite video feeds; live HLS must not loop.
+  video.loop = feedType !== 'hls';
   let disposed = false;
   let hls = null;
   const leaseId = feedType === 'hls' ? globalThis.crypto.randomUUID() : null;
