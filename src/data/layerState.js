@@ -387,7 +387,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'wind', token: 'k', disposition: 'enabled+options', optionOwner: 'wind' }),
+  Object.freeze({
+    id: 'wind',
+    token: 'k',
+    disposition: 'enabled+options',
+    optionOwner: 'wind',
+  }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(

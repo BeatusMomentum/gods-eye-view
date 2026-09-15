@@ -21,7 +21,22 @@ export function resampleWindGrid({
   dx = 1,
   dy = 1,
 }) {
-  if (!Number.isInteger(ni) || !Number.isInteger(nj) || ni < 1 || nj < 1 || ni * nj > 2_000_000 || u?.length !== ni * nj || v?.length !== ni * nj || ![lo1, la1, di, dj, dx, dy].every(Number.isFinite) || di <= 0 || dj <= 0 || dx < 0.25 || dy < 0.25 || dx > 180 || dy > 180)
+  if (
+    !Number.isInteger(ni) ||
+    !Number.isInteger(nj) ||
+    ni < 1 ||
+    nj < 1 ||
+    ni * nj > 2_000_000 ||
+    u?.length !== ni * nj ||
+    v?.length !== ni * nj ||
+    ![lo1, la1, di, dj, dx, dy].every(Number.isFinite) ||
+    di <= 0 ||
+    dj <= 0 ||
+    dx < 0.25 ||
+    dy < 0.25 ||
+    dx > 180 ||
+    dy > 180
+  )
     throw new Error('Invalid wind grid geometry');
   const nx = Math.round(360 / dx);
   const ny = Math.round(180 / dy) + 1;

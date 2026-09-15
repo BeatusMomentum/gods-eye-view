@@ -9,7 +9,9 @@ export async function readWindBody(response, maxBytes, signal) {
   if (!reader) throw new Error('Wind response has no readable body');
   const chunks = [];
   let size = 0;
-  const cancel = () => { void reader.cancel().catch(() => {}); };
+  const cancel = () => {
+    void reader.cancel().catch(() => {});
+  };
   signal?.addEventListener('abort', cancel, { once: true });
   try {
     while (true) {
@@ -23,7 +25,10 @@ export async function readWindBody(response, maxBytes, signal) {
     }
     const bytes = new Uint8Array(size);
     let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
     return bytes;
   } catch (error) {
     cancel();

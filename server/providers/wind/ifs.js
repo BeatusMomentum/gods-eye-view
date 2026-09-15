@@ -89,7 +89,8 @@ export function ifsWindRanges(entries) {
 export function nearestIfsStep(hours, cycleHour) {
   const max = cycleHour === 6 || cycleHour === 18 ? 144 : 360;
   const value = Math.max(0, Number.isFinite(hours) ? hours : 0);
-  const step = value <= 144 ? Math.round(value / 3) * 3 : Math.round(value / 6) * 6;
+  const step =
+    value <= 144 ? Math.round(value / 3) * 3 : Math.round(value / 6) * 6;
   return Math.max(0, Math.min(max, step));
 }
 

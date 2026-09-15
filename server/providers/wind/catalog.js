@@ -7,9 +7,14 @@ export function gfsObjectKey({ date, hour, forecastHour = 0 }) {
 }
 
 /** Select the latest GFS cycle that should be available. */
-export function selectLatestGfsCycle(nowMs, { availabilityLagMs = 5 * 3600_000 } = {}) {
+export function selectLatestGfsCycle(
+  nowMs,
+  { availabilityLagMs = 5 * 3600_000 } = {},
+) {
   const d = new Date(nowMs - availabilityLagMs);
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const date = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   const hour = Math.floor(d.getUTCHours() / 6) * 6;
   date.setUTCHours(hour);
   return { date: date.toISOString().slice(0, 10).replaceAll('-', ''), hour };

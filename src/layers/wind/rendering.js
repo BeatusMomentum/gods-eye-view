@@ -48,7 +48,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
           const lon = west + Math.random() * (east - west);
           const lat = south + Math.random() * (north - south);
           return {
-            lon: ((lon + 180) % 360 + 360) % 360 - 180,
+            lon: ((((lon + 180) % 360) + 360) % 360) - 180,
             lat: Math.max(-89, Math.min(89, lat)),
             age: Math.random() * 30,
           };
@@ -103,12 +103,21 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
       resize(viewer);
       if (particles.length !== budget()) seed();
       const camera = viewer.scene.camera;
-      const signature = [camera?.positionWC?.x, camera?.positionWC?.y, camera?.positionWC?.z, camera?.heading, camera?.pitch, camera?.roll].join(',');
+      const signature = [
+        camera?.positionWC?.x,
+        camera?.positionWC?.y,
+        camera?.positionWC?.z,
+        camera?.heading,
+        camera?.pitch,
+        camera?.roll,
+      ].join(',');
       if (signature !== cameraSignature) {
         context.clearRect(0, 0, cssWidth, cssHeight);
         cameraSignature = signature;
       }
-      const dt = lastTime ? Math.min(1, Math.max(0, (time - lastTime) / 1000)) : 0.016;
+      const dt = lastTime
+        ? Math.min(1, Math.max(0, (time - lastTime) / 1000))
+        : 0.016;
       lastTime = time;
       // Fade previous trails by ERASING them (destination-out). A translucent
       // black fill would instead accumulate alpha and saturate the overlay.
@@ -124,8 +133,15 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
       const speedScale = Math.max(1, Math.min(4000, cameraHeight / 400));
       let occluder = null;
       try {
-        if (cesium.EllipsoidalOccluder && cesium.Ellipsoid && scene.camera?.positionWC)
-          occluder = new cesium.EllipsoidalOccluder(cesium.Ellipsoid.WGS84, scene.camera.positionWC);
+        if (
+          cesium.EllipsoidalOccluder &&
+          cesium.Ellipsoid &&
+          scene.camera?.positionWC
+        )
+          occluder = new cesium.EllipsoidalOccluder(
+            cesium.Ellipsoid.WGS84,
+            scene.camera.positionWC,
+          );
       } catch {
         occluder = null; // fall back to frustum-only culling
       }
@@ -194,7 +210,8 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
       if (canvas) {
         resize(getViewer?.());
         seed();
-        if (running && frame === null) frame = globalThis.requestAnimationFrame(draw);
+        if (running && frame === null)
+          frame = globalThis.requestAnimationFrame(draw);
       }
     },
     /** Start the animation loop. Safe to call before a field is installed. */
