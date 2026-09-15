@@ -863,6 +863,19 @@ const schemas = [
       },
     },
   },
+  {
+    name: 'next_satellite_pass',
+    parameters: {
+      type: 'object', additionalProperties: false, required: ['target'],
+      properties: {
+        target: { type: 'string', minLength: 1, maxLength: 120 },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        minElevationDeg: { type: 'number', minimum: 5, maximum: 60 },
+        visibleOnly: { type: 'boolean' },
+      },
+    },
+  },
 ];
 
 function freeze(value) {

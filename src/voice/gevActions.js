@@ -791,6 +791,10 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       };
     }
 
+    if (name === 'next_satellite_pass') {
+      return nextSatellitePass(viewer, dataManager, args);
+    }
+
     if (name === 'next_iss_pass') {
       return nextIssPass(viewer, dataManager, args);
     }
@@ -2043,7 +2047,28 @@ function nextIssPass(viewer, dataManager, args) {
     durationMin: Math.max(1, Math.round((pass.setMs - pass.riseMs) / 60000)),
     peakElevationDeg: Math.round(pass.maxElevDeg),
     riseDirection: compassDir(pass.riseAzDeg),
+    visible: typeof pass.visible === 'boolean' ? pass.visible : null,
+    visibilityNote: 'Geometric illumination estimate only; weather, brightness and orbital-element age affect actual visibility.',
+    setIso: new Date(pass.setMs).toISOString(),
+    peakIso: new Date(pass.maxElevMs).toISOString(),
   };
+}
+
+function nextSatellitePass(viewer, dataManager, args) {
+  const layer = dataManager?.layers?.get('satellites')?.module;
+  const identity = layer?.resolveSatelliteForPass?.(args.target) || { status: 'not-found' };
+  if (identity.status !== 'ok') return {
+    ok: false, action: 'next_satellite_pass', ...identity,
+    error: identity.status === 'ambiguous' ? 'Several loaded satellites match. Choose a NORAD ID from candidates.' : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
+  };
+  // Reuse the legacy location fallback and result formatting, substituting only
+  // this explicitly resolved catalog identity and the optional visibility filter.
+  const adapter = { layers: new Map([['satellites', { module: {
+    getNextIssPass: (options) => layer.getNextSatellitePass(identity.noradId, { ...options, requireVisible: args.visibleOnly === true }),
+  } }]]) };
+  const result = nextIssPass(viewer, adapter, args);
+  if (result.error) result.error = result.error.replace(/ISS/g, identity.name || String(identity.noradId));
+  return { ...result, action: 'next_satellite_pass', noradId: identity.noradId, name: identity.name, visibleOnly: args.visibleOnly === true, horizonHours: 24 };
 }
 
 function normalizePanelId(value) {
