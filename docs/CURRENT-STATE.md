@@ -1,6 +1,6 @@
 # God's Eye View Current State
 
-Wind is an optional GFS 10 m forecast overlay. Source acquisition has deadline and body budgets, disconnect cancellation and one-minute failure backoff. The row distinguishes model issue time from forecast valid time. Animation starts only with a field, stops on disable/destruction, preserves trails between unchanged canvas dimensions and scales from 200 to 4,000 particles with viewport area. Application catalog construction owns each instance.
+Wind appears in the Weather group before Utilities and is an optional GFS 10 m forecast overlay. Source acquisition has deadline and body budgets, disconnect cancellation and one-minute failure backoff. The row distinguishes model issue time from forecast valid time. Animation starts only with a field, stops on disable/destruction, preserves trails between unchanged canvas dimensions and scales from 200 to 4,000 particles with viewport area. Application catalog construction owns each instance.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
