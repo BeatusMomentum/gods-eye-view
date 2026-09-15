@@ -1,3 +1,4 @@
+import { layerSnapshot, layerSnapshots, feedProvenanceEnvelope } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
@@ -2352,7 +2353,11 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
       enabled: layer.enabled,
       count: layer.stats?.count || 0,
       error: layer.stats?.error || null,
+      feedState: layerSnapshot(layer).feedState,
+      source: layerSnapshot(layer).source,
+      lastUpdate: layerSnapshot(layer).lastUpdate,
     })),
+    feedProvenance: feedProvenanceEnvelope(layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled)),
   };
 }
 
@@ -3253,6 +3258,12 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null, plac
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
     },
+    getLayerSnapshot(layerKey) {
+      const row = dataManager.getAll?.().find((layer) => layer.id === layerKey);
+      if (row) return layerSnapshot(row);
+      const module = dataManager.layers?.get(layerKey)?.module;
+      return layerSnapshot({ id: layerKey, enabled: dataManager.isEnabled?.(layerKey), stats: module?.getStats?.() || {} });
+    },
     getRecordCoverage(layerKey, rows) {
       if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey)) return null;
       const module = dataManager.layers.get(layerKey)?.module;
@@ -3353,7 +3364,10 @@ async function runAnalystQuery(analystEngine, dataManager, args = {}, _layerEnab
   // arbitrary points — only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
   const entityWindow = aircraftProximityWindowForQuery(dataManager, args, result);
-  if (entityWindow) return entityWindow;
+  if (entityWindow) {
+    const provenance = feedProvenanceEnvelope(layerSnapshots(dataManager.getAll?.() || []).filter((layer) => layer.enabled && ['flights', 'military'].includes(layer.id)));
+    return { ...entityWindow, feedProvenance: provenance, feedState: provenance.overall };
+  }
 
   const contactsWindow = activeContactsWindow(dataManager);
   const aircraftQueried = (result.coverage?.layersQueried || [])
@@ -3385,6 +3399,8 @@ async function runAnalystQuery(analystEngine, dataManager, args = {}, _layerEnab
     items,
     summary: result.summary,
     coverage: result.coverage,
+    feedProvenance: result.coverage?.feedProvenance || null,
+    feedState: result.coverage?.feedProvenance?.overall || null,
     // The panel's own numbers, carried so the answer can match what the
     // operator is looking at regardless of how the model reads the note.
     // Flattened alongside the object so the count and its subject cannot be

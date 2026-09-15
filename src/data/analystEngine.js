@@ -24,6 +24,7 @@
  * @module data/analystEngine
  */
 
+import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
 
 /** Layers the engine understands, with the fields queries may reference. */
@@ -118,12 +119,15 @@ export function createAnalystEngine(providers) {
     // 1) Source records
     let records;
     let layersQueried;
+    let queriedSnapshots;
     if (layers === null) {
       records = lastResult.items.slice();
       layersQueried = lastResult.coverage.layersQueried;
+      queriedSnapshots = lastResult.coverage.feedProvenance?.layers || [];
     } else {
       records = [];
       layersQueried = [];
+      queriedSnapshots = [];
       const unknown = layers.filter((k) => !ANALYST_LAYERS[k]);
       if (unknown.length) {
         return {
@@ -135,7 +139,9 @@ export function createAnalystEngine(providers) {
       for (const key of layers) {
         if (!ANALYST_LAYERS[key]) continue;
         const rows = providers.getRecords(key) || [];
-        layersQueried.push({ layerKey: key, records: rows.length, ...providers.getRecordCoverage?.(key, rows) });
+        const snapshot = providers.getLayerSnapshot?.(key);
+        if (snapshot) queriedSnapshots.push(snapshot);
+        layersQueried.push({ layerKey: key, records: rows.length, ...(snapshot ? { feedState: snapshot.feedState, source: snapshot.source, lastUpdate: snapshot.lastUpdate, enabled: snapshot.enabled, error: snapshot.error } : {}), ...providers.getRecordCoverage?.(key, rows) });
         for (const row of rows) records.push({ layerKey: key, ...row });
       }
     }
@@ -231,6 +237,7 @@ export function createAnalystEngine(providers) {
       coverage: {
         layersQueried,
         scope: scopeNote,
+        ...(queriedSnapshots.length ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) } : {}),
         followUp: Boolean(spec.followUp && lastResult),
         note: layersQueried.some((layer) => layer.basis === 'bounded-loaded-records')
           ? 'Counts and ranks cover the bounded examined loaded records only; omitted records may change the nearest item or count. Satellite distance is ground distance, not slant range.'
