@@ -511,6 +511,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -583,7 +585,11 @@
       "src/ui/visualSettings.js",
       "src/worldFocus.js",
       "src/data/feedState.js",
-      "src/data/layerSnapshot.js"
+      "src/data/layerSnapshot.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js"
     ],
     "external": ["cesium"]
   },
@@ -615,6 +621,11 @@
     ],
     "external": []
   },
+  "director": {
+    "exports": ["./director"],
+    "modules": ["src/director/playback.js"],
+    "external": []
+  },
   "scenes": {
     "exports": ["./scenes"],
     "modules": [
@@ -624,6 +635,8 @@
       "src/data/bhoteKoshiFloodPath.js",
       "src/maps/catalog.js",
       "src/scenes/director.js",
+      "src/scenes/playbackAdapter.js",
+      "src/director/playback.js",
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
       "src/bloom.js",
@@ -1117,7 +1130,18 @@
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
       "src/voice/realtimeSession.js",
-      "src/voice/realtimeEvents.js"
+      "src/voice/realtimeEvents.js",
+      "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProtocol.js",
+      "src/voice/realtimeDiagnostics.js",
+      "src/voice/realtimeViewport.js",
+      "src/voice/realtimeInputPolicy.js",
+      "src/voice/realtimeInput.js",
+      "src/voice/realtimeCost.js",
+      "src/voice/realtimeFacade.js",
+      "src/voice/realtimeRadio.js",
+      "src/voice/realtimeTurns.js",
+      "src/voice/realtimeConnection.js"
     ],
     "external": []
   },
@@ -1539,6 +1563,8 @@
       "src/renderGovernor.js",
       "src/rightRailPolicy.js",
       "src/scenes/director.js",
+      "src/scenes/playbackAdapter.js",
+      "src/director/playback.js",
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
       "src/scopeMask.js",
@@ -1568,6 +1594,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -1714,7 +1742,22 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js",
+      "src/voice/realtimePreferences.js",
+      "src/voice/realtimeProtocol.js",
+      "src/voice/realtimeDiagnostics.js",
+      "src/voice/realtimeViewport.js",
+      "src/voice/realtimeInputPolicy.js",
+      "src/voice/realtimeInput.js",
+      "src/voice/realtimeCost.js",
+      "src/voice/realtimeFacade.js",
+      "src/voice/realtimeRadio.js",
+      "src/voice/realtimeTurns.js",
+      "src/voice/realtimeConnection.js"
     ],
     "external": [
       "hls.js",

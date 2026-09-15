@@ -14,6 +14,8 @@
 
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
+import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
+import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
 import {
   SCENE_APPEND_RECIPES,
@@ -2064,28 +2066,7 @@ export class SceneDirector {
    * @returns {Array<{ scene: Object, shot: Object }>}
    */
   _buildPlaybackQueue(startSceneId, { single = false } = {}) {
-    if (!this._project.scenes.length) return [];
-
-    // Rotate the scene list so startSceneId comes first
-    const startIdx = Math.max(
-      0,
-      this._project.scenes.findIndex((scene) => scene.id === startSceneId),
-    );
-    const ordered = single
-      ? this._project.scenes.slice(startIdx, startIdx + 1)
-      : [
-          ...this._project.scenes.slice(startIdx),
-          ...this._project.scenes.slice(0, startIdx),
-        ];
-
-    // Flatten scenes into a sequential shot queue
-    const queue = [];
-    for (const scene of ordered) {
-      for (const shot of scene.shots) {
-        queue.push({ scene, shot });
-      }
-    }
-    return queue;
+    return buildPlaybackQueue(this._project.scenes, startSceneId, { single });
   }
 
   /**
@@ -2255,110 +2236,21 @@ export class SceneDirector {
     this._logEvent('scene_run_start', { count: queue.length });
     this._setPlaybackKeyboardEnabled(true);
 
-    let activeScene = null;
     try {
-      const loadedScene = this._project.scenes.find(
-        (scene) => scene.id === this._loadedSceneId,
-      );
-      if (loadedScene && loadedScene.id !== queue[0].scene.id) {
-        const released = await this._releaseSceneLayers(loadedScene, token);
-        if (!released)
-          throw new Error(`Could not leave scene: ${loadedScene.title}`);
-        this._loadedSceneId = null;
-      }
-
-      // Main shot sequencing loop
-      for (let idx = 0; idx < queue.length; idx++) {
-        if (token.cancelled) break;
-        const { scene, shot } = queue[idx];
-
-        if (activeScene && activeScene.id !== scene.id) {
-          await this._releaseSceneLayers(activeScene);
-          this._loadedSceneId = null;
-          activeScene = null;
-          if (token.cancelled) break;
-        }
-        activeScene = scene;
-
-        // Update UI selection to track the active shot
-        this._selectedSceneId = scene.id;
-        this._selectedShotId = shot.id;
-        this._renderSceneSelect();
-        this._renderShotList();
-
-        this._updateStatus(
-          `Running ${idx + 1}/${queue.length}: ${scene.title} / ${shot.title}`,
-        );
-
-        this._logEvent('shot_start', {
-          sceneId: scene.id,
-          shotId: shot.id,
-          title: shot.title,
-          index: idx,
-        });
-
-        // Apply visual state (style, bloom, sharpen, HUD, detection) then layers, then fly.
-        // Awaited: applyVisualState suspends on a map-stack switch, and a shot
-        // captured by the operator carries one — un-awaited, its shader uniforms
-        // land after the NEXT shot has already been applied.
-        //
-        // Every await is a place STOP/Esc can arrive. A suspended map-stack
-        // switch can hold this shot for seconds; without a re-check the layer
-        // pass below still runs and the operator watches layers keep toggling
-        // after they hit Stop. Cancellation is re-read after each one.
-        await this.styleManager.applyVisualState(
-          this._visualStateForShot(shot),
-          {
-            isCurrent: () => !token.cancelled,
-          },
-        );
-        if (token.cancelled) break;
-        const flightDuration = shot.durationSec || DEFAULT_SHOT_DURATION_SEC;
-        await this._applyLayerStates(
-          this._layerStatesForShot(scene, shot),
-          token,
-        );
-        if (token.cancelled) break;
-        this._loadedSceneId = scene.id;
-        const sceneTiming = this._startSceneClockTicker(scene, shot, token);
-        const cameraTravel = this._beginShotTravel(scene, shot, flightDuration);
-        const flight = this._flyCamera(shot.camera, flightDuration, token);
-        this._publishShotTravel(scene, shot, cameraTravel);
-        await flight;
-        if (token.cancelled) break;
-        this._settleShotLayerStates(scene, shot, token, cameraTravel);
-        if (token.cancelled) break;
-        // Hold on the final frame before transitioning to the next shot
-        await this._holdShot(scene, shot, token);
-        if (token.cancelled) break;
-        clearInterval(this._sceneClockTimer);
-        this._sceneClockTimer = null;
-        this._publishSceneClock(scene, shot, sceneTiming.endElapsedSec, {
-          running: true,
-        });
-
-        this._logEvent('shot_end', {
-          sceneId: scene.id,
-          shotId: shot.id,
-          index: idx,
-        });
-      }
-
-      if (!token.cancelled) {
-        this._setProgress(1);
-        this._updateStatus('Scene run complete');
-        this._logEvent('scene_run_complete', {});
-      }
+      await playSceneQueue(queue, {
+        token,
+        adapter: createScenePlaybackAdapter(this, DEFAULT_SHOT_DURATION_SEC),
+        previousScene: this._project.scenes.find(
+          (scene) => scene.id === this._loadedSceneId,
+        ),
+        releaseOnFinish: preview,
+      });
     } catch (error) {
       this._updateStatus(`Error: ${error.message || 'run failed'}`);
       this._logEvent('scene_run_error', {
         message: error.message || 'unknown error',
       });
     } finally {
-      if (preview) {
-        await this._releaseSceneLayers(activeScene);
-        if (activeScene?.id === this._loadedSceneId) this._loadedSceneId = null;
-      }
       this._finishRun();
     }
   }
