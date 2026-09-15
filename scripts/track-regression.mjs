@@ -365,6 +365,19 @@ async function main() {
             lastMessageAt: null,
           }));
         }
+        // Contacts also enables mapped installations. This tracking harness
+        // does not test installation acquisition; a valid empty viewport keeps
+        // public Overpass outages out of aircraft/satellite tracking results.
+        // Preserve the real response shape and all console-error assertions.
+        if (isAppRequest && url.pathname === '/api/military-installations') {
+          return Promise.resolve(jsonResponse({
+            elements: [],
+            saturated: false,
+            elementCap: 700,
+            retrievedAt: new Date().toISOString(),
+            status: 'ready',
+          }));
+        }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
         // the satellite assertions are deterministic and the run never depends
         // on an upstream that rate-limits (it was answering 403 the night this
