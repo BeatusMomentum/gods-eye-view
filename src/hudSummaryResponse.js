@@ -95,3 +95,10 @@ export function hudTelemetryProvenanceTag(layers = [], options) {
     .slice(0, 2);
   return `${envelope.overall.toUpperCase()}${names.length ? ` ${names.join('/')}` : ''}`;
 }
+
+/** Require the supplied non-nominal state before showing an AI summary. */
+export function hudSummaryMatchesProvenance(summary, provenance) {
+  const state = provenance?.overall;
+  if (!state || state === 'nominal' || state === 'off') return true;
+  return String(summary || '').toUpperCase().split(/\W+/).includes(String(state).toUpperCase());
+}

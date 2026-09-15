@@ -20,7 +20,7 @@ import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
-import { hudSummaryLayerContext, hudTelemetryProvenanceTag, isHudSummaryUnconfigured } from './hudSummaryResponse.js';
+import { hudSummaryMatchesProvenance, hudSummaryLayerContext, hudTelemetryProvenanceTag, isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -677,7 +677,7 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(data.summary, animate);
+      this._setSummaryText(hudSummaryMatchesProvenance(data.summary, context.feedProvenance) ? data.summary : fallbackText, animate);
     } catch (error) {
       if (error?.name !== 'AbortError') {
         console.warn('[HUD] AI summary unavailable:', error);

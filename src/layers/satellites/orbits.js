@@ -204,14 +204,27 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     const exactId = /^\d+$/.test(text) ? Number(text) : null;
     if (exactId !== null) {
       const sat = layerState._catalog.get(exactId);
-      return sat?.satrec ? { status: 'ok', noradId: exactId, name: sat.name } : { status: 'not-found' };
+      return sat?.satrec
+        ? { status: 'ok', noradId: exactId, name: sat.name }
+        : { status: 'not-found' };
     }
     const q = text.toLowerCase();
     const rows = [...layerState._catalog].filter(([, sat]) => sat.satrec);
-    const exact = rows.filter(([, sat]) => String(sat.name).toLowerCase() === q);
-    const matches = exact.length ? exact : rows.filter(([, sat]) => String(sat.name).toLowerCase().includes(q));
+    const exact = rows.filter(
+      ([, sat]) => String(sat.name).toLowerCase() === q,
+    );
+    const matches = exact.length
+      ? exact
+      : rows.filter(([, sat]) => String(sat.name).toLowerCase().includes(q));
     if (!matches.length) return { status: 'not-found' };
-    if (matches.length > 1) return { status: 'ambiguous', candidates: matches.slice(0, 8).map(([noradId, sat]) => ({ noradId, name: sat.name })), totalMatches: matches.length };
+    if (matches.length > 1)
+      return {
+        status: 'ambiguous',
+        candidates: matches
+          .slice(0, 8)
+          .map(([noradId, sat]) => ({ noradId, name: sat.name })),
+        totalMatches: matches.length,
+      };
     return { status: 'ok', noradId: matches[0][0], name: matches[0][1].name };
   }
 

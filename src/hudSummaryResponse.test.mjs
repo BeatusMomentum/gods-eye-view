@@ -170,3 +170,10 @@ test('the HUD proxy uses the shared provenance instructions', () => {
   assert.match(local, /HUD_SUMMARY_INSTRUCTIONS/);
   assert.doesNotMatch(local, /enabled-layer text labels/);
 });
+
+test('AI summaries missing a non-nominal provenance token fall back deterministically', async () => {
+  const { hudSummaryMatchesProvenance } = await import('./hudSummaryResponse.js');
+  assert.equal(hudSummaryMatchesProvenance('Austin flights operating normally today', { overall: 'stale' }), false);
+  assert.equal(hudSummaryMatchesProvenance('Austin stale flights over downtown', { overall: 'stale' }), true);
+  assert.equal(hudSummaryMatchesProvenance('Austin flights operating normally today', { overall: 'nominal' }), true);
+});

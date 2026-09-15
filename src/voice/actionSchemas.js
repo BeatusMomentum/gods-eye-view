@@ -866,7 +866,9 @@ const schemas = [
   {
     name: 'next_satellite_pass',
     parameters: {
-      type: 'object', additionalProperties: false, required: ['target'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['target'],
       properties: {
         target: { type: 'string', minLength: 1, maxLength: 120 },
         latitude: { type: 'number', minimum: -90, maximum: 90 },

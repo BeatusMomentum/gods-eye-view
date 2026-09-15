@@ -24,9 +24,18 @@ const AU_KM = 149597870.7;
 export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
   const date = new Date(dateMs);
   let pv;
-  try { pv = propagate(satrec, date); } catch { return null; }
+  try {
+    pv = propagate(satrec, date);
+  } catch {
+    return null;
+  }
   const pos = pv && pv.position;
-  if (!pos || typeof pos === 'boolean' || ![pos.x, pos.y, pos.z].every(Number.isFinite)) return null;
+  if (
+    !pos ||
+    typeof pos === 'boolean' ||
+    ![pos.x, pos.y, pos.z].every(Number.isFinite)
+  )
+    return null;
   const ecf = eciToEcf(pos, gstime(date));
   const look = ecfToLookAngles(
     { latitude: latDeg * D2R, longitude: lonDeg * D2R, height: 0 },
@@ -199,10 +208,31 @@ export function findNextSatellitePass({
   requireVisible = false,
   maxSunElevDeg = -6,
 }) {
-  if (!satrec || ![latDeg, lonDeg, fromMs, minElevDeg, horizonHours, coarseStepSec, fineStepSec, maxSunElevDeg].every(Number.isFinite)
-    || Math.abs(latDeg) > 90 || Math.abs(lonDeg) > 180 || Math.abs(fromMs) > 8.63e15
-    || minElevDeg < 0 || minElevDeg > 90 || horizonHours <= 0 || horizonHours > 72
-    || coarseStepSec < 1 || coarseStepSec > 120 || fineStepSec < 0.1 || fineStepSec > 60) return null;
+  if (
+    !satrec ||
+    ![
+      latDeg,
+      lonDeg,
+      fromMs,
+      minElevDeg,
+      horizonHours,
+      coarseStepSec,
+      fineStepSec,
+      maxSunElevDeg,
+    ].every(Number.isFinite) ||
+    Math.abs(latDeg) > 90 ||
+    Math.abs(lonDeg) > 180 ||
+    Math.abs(fromMs) > 8.63e15 ||
+    minElevDeg < 0 ||
+    minElevDeg > 90 ||
+    horizonHours <= 0 ||
+    horizonHours > 72 ||
+    coarseStepSec < 1 ||
+    coarseStepSec > 120 ||
+    fineStepSec < 0.1 ||
+    fineStepSec > 60
+  )
+    return null;
   const horizonMs = fromMs + horizonHours * 3600_000;
   const coarseMs = coarseStepSec * 1000;
   const fineMs = Math.max(1000, (fineStepSec || 5) * 1000);
@@ -338,11 +368,16 @@ export function findNextSatellitePass({
       const denom = 2 * (peakLeftElev - 2 * maxElevDeg + peakRightElev);
       const shift = ((peakLeftElev - peakRightElev) / denom) * peakStepMs;
       if (Math.abs(shift) < peakStepMs) {
-        refinedPeakMs = Math.max(riseMs, Math.min(setMs, Math.round(maxElevMs + shift)));
-        refinedPeakElevDeg =
-          Math.min(90, maxElevDeg -
-          Math.pow(peakLeftElev - peakRightElev, 2) /
-            (8 * (peakLeftElev - 2 * maxElevDeg + peakRightElev)));
+        refinedPeakMs = Math.max(
+          riseMs,
+          Math.min(setMs, Math.round(maxElevMs + shift)),
+        );
+        refinedPeakElevDeg = Math.min(
+          90,
+          maxElevDeg -
+            Math.pow(peakLeftElev - peakRightElev, 2) /
+              (8 * (peakLeftElev - 2 * maxElevDeg + peakRightElev)),
+        );
       }
     }
 
@@ -365,7 +400,10 @@ export function findNextSatellitePass({
     if (!hasVisibleSegment) {
       hasVisibleSegment = hasVisibleInterval(riseMs, setMs, (time) => {
         const look = lookAnglesAt(satrec, time, latDeg, lonDeg);
-        return [Boolean(look && isSatelliteSunlit(look.satECI, time)), isObserverDark(latDeg, lonDeg, time, maxSunElevDeg)];
+        return [
+          Boolean(look && isSatelliteSunlit(look.satECI, time)),
+          isObserverDark(latDeg, lonDeg, time, maxSunElevDeg),
+        ];
       });
     }
 
@@ -390,7 +428,6 @@ export function findNextSatellitePass({
 
   return null;
 }
-
 
 /** Resolve shadow/twilight crossings to 20ms so short overlap is not lost between samples. */
 export function hasVisibleInterval(start, end, conditionsAt) {

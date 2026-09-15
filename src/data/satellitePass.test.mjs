@@ -239,25 +239,44 @@ test('findNextSatellitePass samples the peak at fineStepSec', () => {
   assert.ok(Math.abs(fine.maxElevDeg - coarse.maxElevDeg) < 0.01);
 });
 
-
 test('invalid numerical search options return promptly without unbounded scans', () => {
   const satrec = twoline2satrec(L1, L2);
   const options = { satrec, ...AUSTIN, fromMs: FROM_MS };
-  for (const change of [{ coarseStepSec: 0 }, { coarseStepSec: -1 }, { horizonHours: Infinity }, { horizonHours: 73 }, { fineStepSec: NaN }, { latDeg: 91 }, { fromMs: NaN }]) {
+  for (const change of [
+    { coarseStepSec: 0 },
+    { coarseStepSec: -1 },
+    { horizonHours: Infinity },
+    { horizonHours: 73 },
+    { fineStepSec: NaN },
+    { latDeg: 91 },
+    { fromMs: NaN },
+  ]) {
     assert.equal(findNextSatellitePass({ ...options, ...change }), null);
   }
 });
 
 test('visibility catches a short overlap between shadow exit and dawn', () => {
-  assert.equal(hasVisibleInterval(0, 5000, (t) => [t >= 2400, t <= 2500]), true);
-  assert.equal(hasVisibleInterval(0, 5000, (t) => [t >= 2500, t <= 2400]), false);
+  assert.equal(
+    hasVisibleInterval(0, 5000, (t) => [t >= 2400, t <= 2500]),
+    true,
+  );
+  assert.equal(
+    hasVisibleInterval(0, 5000, (t) => [t >= 2500, t <= 2400]),
+    false,
+  );
 });
 
 test('a pass already underway clips rise to the requested start', () => {
   const satrec = twoline2satrec(L1, L2);
   const first = findNextSatellitePass({ satrec, ...AUSTIN, fromMs: FROM_MS });
-  const clipped = findNextSatellitePass({ satrec, ...AUSTIN, fromMs: first.maxElevMs });
+  const clipped = findNextSatellitePass({
+    satrec,
+    ...AUSTIN,
+    fromMs: first.maxElevMs,
+  });
   assert.equal(clipped.riseMs, first.maxElevMs);
   assert.ok(clipped.setMs >= clipped.riseMs);
-  assert.ok(clipped.maxElevMs >= clipped.riseMs && clipped.maxElevMs <= clipped.setMs);
+  assert.ok(
+    clipped.maxElevMs >= clipped.riseMs && clipped.maxElevMs <= clipped.setMs,
+  );
 });

@@ -32,7 +32,10 @@ export const LAYER_FEED_STATE_LABELS = Object.freeze({
 });
 
 /** Snapshot feed-state including a disabled layer. */
-export const SNAPSHOT_FEED_STATES = Object.freeze([...LAYER_FEED_STATES, 'off']);
+export const SNAPSHOT_FEED_STATES = Object.freeze([
+  ...LAYER_FEED_STATES,
+  'off',
+]);
 
 /**
  * Lower rank is more severe. Voice/HUD `overall` is the worst queried state
@@ -132,7 +135,9 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
   const enabled = Boolean(layer.enabled);
   const countRaw = Number(stats.count);
   const count = Number.isFinite(countRaw) ? countRaw : 0;
-  const lastUpdate = Number.isFinite(Number(stats.lastUpdate)) ? Number(stats.lastUpdate) : null;
+  const lastUpdate = Number.isFinite(Number(stats.lastUpdate))
+    ? Number(stats.lastUpdate)
+    : null;
   const feedState = enabled ? layerFeedState({ ...stats, source }) : 'off';
   return {
     id: layer.id || layer.layerKey || null,
@@ -179,14 +184,22 @@ export function feedProvenanceNote(layers = [], overall = null) {
     return 'Queried enabled layers are nominal. Still name the count scope; do not claim whole-world coverage.';
   }
   if (overall === 'off') {
-    const names = layers.map((s) => s.name || s.id).filter(Boolean).join(', ') || 'the requested layer';
+    const names =
+      layers
+        .map((s) => s.name || s.id)
+        .filter(Boolean)
+        .join(', ') || 'the requested layer';
     return `${names} is off. Do not invent a count; say the layer is off and offer to enable it.`;
   }
-  const flagged = layers.filter((s) => (
-    s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off'
-  ));
+  const flagged = layers.filter(
+    (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
+  );
   const bits = flagged.map((s) => {
-    const extras = [s.source, s.ageLabel || snapshotAgeLabel(s.lastUpdate), s.error]
+    const extras = [
+      s.source,
+      s.ageLabel || snapshotAgeLabel(s.lastUpdate),
+      s.error,
+    ]
       .filter(Boolean)
       .join(', ');
     return `${s.name || s.id} is ${String(s.feedState).toUpperCase()}${extras ? ` (${extras})` : ''}`;
@@ -201,11 +214,17 @@ export function feedProvenanceNote(layers = [], overall = null) {
  * @param {{ now?: number }} [options]
  * @returns {{ overall: string|null, layers: Array<object>, note: string }}
  */
-export function feedProvenanceEnvelope(snapshots = [], { now = Date.now() } = {}) {
-  const layers = (Array.isArray(snapshots) ? snapshots : []).map((entry) => asSnapshot(entry, now));
+export function feedProvenanceEnvelope(
+  snapshots = [],
+  { now = Date.now() } = {},
+) {
+  const layers = (Array.isArray(snapshots) ? snapshots : []).map((entry) =>
+    asSnapshot(entry, now),
+  );
   const active = layers.filter((s) => s.feedState && s.feedState !== 'off');
-  const overall = worstFeedState(active.map((s) => s.feedState))
-    || (layers.length ? 'off' : null);
+  const overall =
+    worstFeedState(active.map((s) => s.feedState)) ||
+    (layers.length ? 'off' : null);
   return {
     overall,
     layers,
