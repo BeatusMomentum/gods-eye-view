@@ -233,3 +233,21 @@ test('wind failure backoff prevents unbounded repeated upstream acquisition', as
   assert.equal(JSON.parse(results[0].body).reason, 'Wind upstream unavailable');
   await request('/'); assert.equal(calls, 1);
 });
+
+test('shared upstream work survives one disconnect and aborts when the final client leaves', async () => {
+  const { EventEmitter } = await import('node:events');
+  let handler; let signal; let loads = 0;
+  const plugin = proxy({ models: { gfs: ({ signal: next }) => {
+    loads++; signal = next;
+    return new Promise((resolve, reject) => next.addEventListener('abort', () => reject(next.reason), { once: true }));
+  } } });
+  plugin.configureServer({ middlewares: { use: (_path, value) => { handler = value; } } });
+  const first = new EventEmitter(); const second = new EventEmitter();
+  const a = handler({ url: '/manifest', method: 'GET' }, first);
+  const b = handler({ url: '/manifest', method: 'GET' }, second);
+  assert.equal(loads, 1);
+  first.emit('close'); assert.equal(signal.aborted, false);
+  second.emit('close'); assert.equal(signal.aborted, true);
+  await Promise.all([a,b]);
+  assert.equal(first.listenerCount('close'), 0); assert.equal(second.listenerCount('close'), 0);
+});
