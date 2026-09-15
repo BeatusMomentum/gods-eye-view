@@ -1,7 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { randomUUID } from 'node:crypto';
 
 /**
  * Lazily created ecCodes WASM instance. The `@meri-imperiumi/eccodes-wasm`
@@ -37,12 +36,12 @@ export async function decodeWindGribMessage(
   { eccodesModule, mountDir = os.tmpdir() } = {},
 ) {
   const eccodes = eccodesModule ?? (await loadEccodes());
-  const name = `wind-${randomUUID()}.grib2`;
-  const file = path.join(mountDir, name);
-  await fs.writeFile(file, buffer);
+  const directory = await fs.mkdtemp(path.join(mountDir, 'gev-wind-'));
+  const file = path.join(directory, 'wind.grib2');
+  await fs.writeFile(file, buffer, { mode: 0o600 });
   let handle = null;
   try {
-    eccodes.mountFilesystem(mountDir);
+    eccodes.mountFilesystem(directory);
     handle = eccodes.openGrib(file);
     return {
       ni: handle.getLong('Ni'),
@@ -58,6 +57,6 @@ export async function decodeWindGribMessage(
     };
   } finally {
     if (handle) handle.delete();
-    await fs.unlink(file).catch(() => {});
+    await fs.rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 }

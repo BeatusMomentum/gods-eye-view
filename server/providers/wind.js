@@ -40,6 +40,9 @@ export function windProxy({
   let cached = null;
   /** @type {?Promise<object>} */
   let loading = null;
+  let lastAttempt = -Infinity;
+  let controller = null;
+  let waiters = 0;
 
   const sendJson = (res, value, status = 200) => {
     res.writeHead(status, {
@@ -58,14 +61,19 @@ export function windProxy({
     if (cached && cached.id === id && now() - cached.fetchedAt < ttlMs)
       return cached;
     if (loading) return loading;
+    if (cached && now() - lastAttempt < 60_000) return cached;
+    lastAttempt = now();
+    controller = new AbortController();
+    const signal = controller.signal;
+    const timer = setTimeout(() => controller.abort(), 40_000);
     loading = (async () => {
       try {
         const base = `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey(cycle)}`;
-        const index = await fetchText({ url: `${base}.idx`, fetchImpl });
+        const index = await fetchText({ url: `${base}.idx`, fetchImpl, signal });
         const ranges = windMessageRanges(parseGfsIdx(index.toString()));
         const [uBuffer, vBuffer] = await Promise.all([
-          fetchRange({ url: base, ...ranges.u, fetchImpl }),
-          fetchRange({ url: base, ...ranges.v, fetchImpl }),
+          fetchRange({ url: base, ...ranges.u, fetchImpl, signal }),
+          fetchRange({ url: base, ...ranges.v, fetchImpl, signal }),
         ]);
         const [u, v] = await Promise.all([
           decodeImpl(uBuffer),
@@ -83,11 +91,13 @@ export function windProxy({
           dx: targetDx,
           dy: targetDx,
         });
+        signal.throwIfAborted();
+        if ((!grid.u.every(Number.isFinite) || !grid.v.every(Number.isFinite))) throw new Error('Invalid wind grid');
         const idGrid = `${id}-${targetDx}`;
         const manifest = {
           schemaVersion: 1,
           model: 'gfs',
-          cycle: { ...cycle, forecastHour: 0, runIso: cycleRunIso(cycle) },
+          cycle: { ...cycle, forecastHour: 0, runIso: cycleRunIso(cycle), validIso: cycleRunIso(cycle) },
           fetchedAt: now(),
           level: '10 m above ground',
           units: 'm/s',
@@ -110,7 +120,7 @@ export function windProxy({
         if (cached) {
           cached = {
             ...cached,
-            manifest: { ...cached.manifest, stale: true, reason: error.message },
+            manifest: { ...cached.manifest, stale: true, reason: 'Wind upstream unavailable' },
           };
         } else {
           cached = {
@@ -123,13 +133,15 @@ export function windProxy({
               model: 'gfs',
               stale: true,
               unavailable: true,
-              reason: error.message,
+              reason: 'Wind upstream unavailable',
             },
           };
         }
         return cached;
       } finally {
+        clearTimeout(timer);
         loading = null;
+        controller = null;
       }
     })();
     return loading;
@@ -137,7 +149,18 @@ export function windProxy({
 
   const handler = async (req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
-    const state = await refresh();
+    if (req.method !== 'GET') return sendJson(res, { error: 'method_not_allowed' }, 405);
+    if (!['/', '/manifest', '/status'].includes(path) && !/^\/grid\/[\w.-]+\.bin$/.test(path)) return sendJson(res, { error: 'not_found' }, 404);
+    // Grid reads never initiate acquisition; an issued manifest owns its cached grid.
+    if (path.startsWith('/grid/') && (!cached?.grid || path !== `/grid/${cached.idGrid}.bin`)) return sendJson(res, { error: 'unknown_grid' }, 404);
+    let disconnected = false;
+    const close = () => { disconnected = true; waiters -= 1; if (waiters === 0) controller?.abort(); };
+    waiters += 1;
+    res.once?.('close', close);
+    let state;
+    try { state = path.startsWith('/grid/') ? cached : await refresh(); }
+    finally { res.removeListener?.('close', close); if (!disconnected) waiters -= 1; }
+    if (disconnected) return;
     if (path === '/status') {
       const { gridUrl, ...manifest } = state.manifest;
       return sendJson(res, manifest);

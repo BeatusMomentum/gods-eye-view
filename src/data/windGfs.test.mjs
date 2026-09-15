@@ -11,3 +11,11 @@ test('catalog and index helpers', async () => {
   assert.deepEqual([...b], [1, 2, 3]);
   assert.throws(() => windMessageRanges({ messages: p.messages.slice(0, 1) }));
 });
+
+test('wind range fetch rejects invalid offsets and caps chunked bodies', async () => {
+  await assert.rejects(fetchRange({ url: 'x', start: -1, end: 2 }), /range too large/);
+  let cancelled = false;
+  const body = new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(10)); }, cancel() { cancelled = true; } });
+  await assert.rejects(fetchRange({ url: 'x', start: 0, end: 2, fetchImpl: async () => new Response(body, { status: 206 }) }), /budget/);
+  assert.equal(cancelled, true);
+});

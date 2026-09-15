@@ -1,5 +1,7 @@
 # God's Eye View Current State
 
+Wind is an optional GFS 10 m forecast overlay. Source acquisition has deadline and body budgets, disconnect cancellation and one-minute failure backoff. The row distinguishes model issue time from forecast valid time. Animation starts only with a field, stops on disable/destruction, preserves trails between unchanged canvas dimensions and scales from 200 to 4,000 particles with viewport area. Application catalog construction owns each instance.
+
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
 Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.

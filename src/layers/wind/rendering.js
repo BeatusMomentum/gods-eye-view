@@ -20,6 +20,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
   let cssWidth = 1;
   let cssHeight = 1;
   let warned = false;
+  let cameraSignature = null;
 
   const randomParticle = () => ({
     lon: Math.random() * 360 - 180,
@@ -60,7 +61,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
   };
 
   const budget = () =>
-    Math.max(4000, Math.min(12000, Math.floor((cssWidth * cssHeight) / 150)));
+    Math.max(200, Math.min(4000, Math.floor((cssWidth * cssHeight) / 300)));
 
   const seed = () => {
     particles = [];
@@ -74,8 +75,12 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
     const sceneCanvas = viewer?.scene?.canvas;
     cssWidth = sceneCanvas?.clientWidth || container?.clientWidth || 1;
     cssHeight = sceneCanvas?.clientHeight || container?.clientHeight || 1;
-    canvas.width = Math.floor(cssWidth * ratio);
-    canvas.height = Math.floor(cssHeight * ratio);
+    const width = Math.floor(cssWidth * ratio);
+    const height = Math.floor(cssHeight * ratio);
+    // Assigning either dimension clears a real canvas, even if unchanged.
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = width;
+    canvas.height = height;
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
     context.setTransform?.(ratio, 0, 0, ratio, 0, 0);
@@ -96,6 +101,13 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
     if (!viewer || viewer.isDestroyed?.()) return;
     try {
       resize(viewer);
+      if (particles.length !== budget()) seed();
+      const camera = viewer.scene.camera;
+      const signature = [camera?.positionWC?.x, camera?.positionWC?.y, camera?.positionWC?.z, camera?.heading, camera?.pitch, camera?.roll].join(',');
+      if (signature !== cameraSignature) {
+        context.clearRect(0, 0, cssWidth, cssHeight);
+        cameraSignature = signature;
+      }
       const dt = lastTime ? Math.min(1, Math.max(0, (time - lastTime) / 1000)) : 0.016;
       lastTime = time;
       // Fade previous trails by ERASING them (destination-out). A translucent
@@ -103,10 +115,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
       context.globalCompositeOperation = 'destination-out';
       context.fillStyle = 'rgba(0, 0, 0, 0.02)';
       context.fillRect(0, 0, cssWidth, cssHeight);
-      if (!field) {
-        frame = globalThis.requestAnimationFrame(draw);
-        return;
-      }
+      if (!field) return;
       const scene = viewer.scene;
       // Real wind (m/s) is invisible at globe scale, so the advection is
       // exaggerated in proportion to camera height: the same visual speed is
@@ -181,10 +190,11 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
     },
     /** Install a wind field and (re)seed particles. */
     setField(next) {
-      field = next;
+      field = next?.grid ? { ...next.grid, u: next.u, v: next.v } : next;
       if (canvas) {
         resize(getViewer?.());
         seed();
+        if (running && frame === null) frame = globalThis.requestAnimationFrame(draw);
       }
     },
     /** Start the animation loop. Safe to call before a field is installed. */
@@ -192,7 +202,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
       if (running || !canvas) return;
       running = true;
       lastTime = 0;
-      frame = globalThis.requestAnimationFrame(draw);
+      if (field) frame = globalThis.requestAnimationFrame(draw);
     },
     /** Stop the animation loop. */
     stop() {
@@ -202,6 +212,7 @@ export function createWindRendering({ cesium, container, getViewer } = {}) {
     },
     /** Clear the canvas and particles without removing the canvas. */
     clear() {
+      field = null;
       particles = [];
       context?.clearRect(0, 0, cssWidth, cssHeight);
     },

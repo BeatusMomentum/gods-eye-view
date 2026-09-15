@@ -82,7 +82,7 @@ test('wind rendering owns the canvas and particle lifecycle', () => {
   rendering.attach();
   assert.equal(typeof canvas.getContext('2d'), 'object');
   rendering.setField(FIELD);
-  assert.ok(rendering.getParticleCount() >= 3000);
+  assert.ok(rendering.getParticleCount() >= 200);
   rendering.start();
   callbacks.shift()(16);
   assert.ok(strokes.length > 0, 'a driven frame draws trails');
@@ -99,10 +99,7 @@ test('wind rendering starts before a field and still draws once one arrives', ()
   const { rendering, callbacks, strokes } = harness();
   rendering.attach();
   rendering.start();
-  // No field yet: the loop must keep scheduling instead of throwing.
-  const before = callbacks.shift();
-  before(16);
-  assert.equal(callbacks.length, 1, 'the loop reschedules without a field');
+  assert.equal(callbacks.length, 0, 'no animation work before a field arrives');
   rendering.setField(FIELD);
   callbacks.shift()(32);
   assert.ok(strokes.length > 0, 'draws once the field is installed');
@@ -117,4 +114,23 @@ test('wind rendering skips particles hidden by the globe', () => {
   callbacks.shift()(16);
   assert.equal(strokes.length, 0, 'no trail is drawn for an occluded point');
   rendering.stop();
+});
+
+// HTML canvas dimension setters erase pixels even on an identical assignment.
+test('steady frames preserve canvas dimensions and resize adjusts the particle budget', () => {
+  const { rendering, canvas, callbacks } = harness();
+  let resets = 0; let width = 0; let height = 0;
+  Object.defineProperties(canvas, {
+    width: { get: () => width, set: value => { width = value; resets++; } },
+    height: { get: () => height, set: value => { height = value; resets++; } },
+  });
+  rendering.attach(); rendering.setField({ grid: FIELD, u: FIELD.u, v: FIELD.v }); rendering.start();
+  const initial = resets;
+  callbacks.shift()(16); callbacks.shift()(32);
+  assert.equal(resets, initial, 'steady frames must not invoke canvas dimension setters');
+  canvas.clientWidth = 320; canvas.clientHeight = 240;
+  callbacks.shift()(48);
+  assert.equal(resets, initial + 2);
+  assert.ok(rendering.getParticleCount() < 500, 'small view uses a smaller budget');
+  rendering.destroy();
 });

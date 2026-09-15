@@ -156,7 +156,7 @@ test('wind serves last-good with stale on upstream failure', async () => {
   clock += 2 * 3600_000;
   const degraded = JSON.parse((await request('/')).body);
   assert.equal(degraded.stale, true);
-  assert.equal(degraded.reason, 'gfs upstream down');
+  assert.equal(degraded.reason, 'Wind upstream unavailable');
   const frame = await request(good.gridUrl.replace('/api/wind', ''));
   assert.equal(frame.statusCode, 200, 'last-good grid stays addressable');
 });

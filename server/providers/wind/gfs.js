@@ -1,3 +1,4 @@
+import { readWindBody } from '../../../src/sources/windBody.js';
 /**
  * Parse a GFS `.idx` inventory into ordered message records.
  *
@@ -55,9 +56,9 @@ export function windMessageRanges(parsed, { level = '10 m above ground' } = {}) 
 
 /** Fetch a bounded text response as a Buffer. */
 export async function fetchText({ url, fetchImpl = fetch, signal }) {
-  const response = await fetchImpl(url, { signal });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return Buffer.from(await response.arrayBuffer());
+  const response = await fetchImpl(url, { signal, redirect: 'error' });
+  if (!response.ok) { await response.body?.cancel(); throw new Error('Wind upstream unavailable'); }
+  return Buffer.from(await readWindBody(response, 2 * 1024 * 1024, signal));
 }
 
 /**
@@ -72,17 +73,17 @@ export async function fetchRange({
   signal,
   maxBytes = 8 * 1024 * 1024,
 }) {
-  if (end < start || end - start + 1 > maxBytes)
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end - start + 1 > maxBytes)
     throw new Error('range too large');
   const response = await fetchImpl(url, {
     signal,
+    redirect: 'error',
     headers: { Range: `bytes=${start}-${end}` },
   });
   const validStatus =
     response.status === 206 || (response.status === 200 && start === 0);
-  if (!validStatus || !response.ok)
-    throw new Error(`invalid range response ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!validStatus || !response.ok) { await response.body?.cancel(); throw new Error('Wind upstream unavailable'); }
+  const buffer = Buffer.from(await readWindBody(response, end - start + 1, signal));
   if (buffer.length !== end - start + 1)
     throw new Error('invalid range length');
   return buffer;

@@ -1192,6 +1192,7 @@
       "src/layers/wind/model.js",
       "src/layers/wind/rendering.js",
       "src/layers/wind/source.js",
+      "src/sources/windBody.js",
       "src/data/detection.js",
       "src/data/detectionCohort.js",
       "src/data/detectionDraw.js",
