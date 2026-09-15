@@ -144,7 +144,7 @@ The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
 ### ECMWF IFS wind
 
-Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and fetches only 10u/10v GRIB messages, resampling the forecast to the display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution: “Contains modified Copernicus/ECMWF IFS forecast data.” Both model issue time and the selected forecast valid time appear in the layer row. These are model forecasts, not observations.
+Wind also offers ECMWF IFS 10 m forecasts from the keyless [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data) service. The proxy reads its JSON Lines inventory and fetches only 10u/10v GRIB messages, resampling the forecast to the display grid. Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) also apply. In-app attribution identifies this service as based on ECMWF data and products, links the CC BY 4.0 licence, identifies resampling and animation as modifications, and retains the required ECMWF liability disclaimer. Both model issue time and the selected forecast valid time appear in the layer row. These are model forecasts, not observations.
 
 ### NOAA GFS wind
 

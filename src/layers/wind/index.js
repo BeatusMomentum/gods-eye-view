@@ -89,7 +89,7 @@ export function createWindLayer({ feed, cesium = Cesium, container, createRender
     getRowControls() {
       const valid = formatWindValidTime(manifest?.cycle?.validIso);
       const run = formatWindValidTime(manifest?.cycle?.runIso);
-      return { chips: ['gfs', 'ifs'].map((value) => ({ id: `model-${value}`, label: value.toUpperCase(), active: model === value, params: { model: value }, title: value === 'ifs' ? 'ECMWF IFS 10 m forecast' : 'NOAA GFS 10 m forecast' })), legend: [{ label: '0', color: '#1e3a8a' }, { label: '10', color: '#22d3ee' }, { label: '20', color: '#fbbf24' }, { label: '30+ m/s', color: '#ef4444' }], info: `${model.toUpperCase()} forecast · Valid: ${valid || 'Unavailable'} · Issued: ${run || 'Unavailable'}${manifest?.stale ? ' · STALE' : ''}` };
+      return { chips: ['gfs', 'ifs'].map((value) => ({ id: `model-${value}`, label: value.toUpperCase(), active: model === value, params: { model: value }, title: value === 'ifs' ? 'ECMWF IFS 10 m forecast' : 'NOAA GFS 10 m forecast' })), legend: [{ label: '0', color: '#1e3a8a' }, { label: '10', color: '#22d3ee' }, { label: '20', color: '#fbbf24' }, { label: '30+ m/s', color: '#ef4444' }], info: `${model === 'ifs' ? 'ECMWF IFS' : 'GFS'} forecast · Valid: ${valid || 'Unavailable'} · Issued: ${run || 'Unavailable'}${manifest?.stale ? ' · STALE' : ''}` };
     },
     setRowControlsListener(listener) { rowControlsListener = typeof listener === 'function' ? listener : null; },
     destroy() { layer.disable(); rendering?.destroy(); rendering = null; viewer = null; rowControlsListener = null; },

@@ -200,16 +200,18 @@ export const DATA_CREDITS = [
   {
     key: 'wind-gfs',
     html:
-      'Wind: NOAA Global Forecast System (GFS) 10 m wind via ' +
+      'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
       '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
       '(U.S. public domain; forecast, not observations)',
   },
   {
     key: 'ecmwf-ifs',
     html:
-      'Contains modified Copernicus/ECMWF IFS forecast data, licensed under CC BY 4.0. ' +
-      'Source: https://data.ecmwf.int/forecasts/ ' +
-      '(<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a>)',
+      'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
+      '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {

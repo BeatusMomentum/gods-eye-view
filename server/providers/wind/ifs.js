@@ -81,15 +81,16 @@ export function ifsWindRanges(entries) {
 
 /**
  * Round a time offset to the nearest published IFS forecast step. IFS 0.25°
- * oper is 3-hourly through f144 (00/12z) or f90 (06/18z).
+ * oper is 3-hourly through f144, then 6-hourly to f360 for 00/12z.
  * @param {number} hours - Hours elapsed since the cycle run time.
  * @param {number} cycleHour - The cycle hour (0, 6, 12 or 18).
  * @returns {number} A valid forecast step.
  */
 export function nearestIfsStep(hours, cycleHour) {
-  const max = cycleHour === 6 || cycleHour === 18 ? 90 : 144;
+  const max = cycleHour === 6 || cycleHour === 18 ? 144 : 360;
   const value = Math.max(0, Number.isFinite(hours) ? hours : 0);
-  return Math.max(0, Math.min(max, Math.round(value / 3) * 3));
+  const step = value <= 144 ? Math.round(value / 3) * 3 : Math.round(value / 6) * 6;
+  return Math.max(0, Math.min(max, step));
 }
 
 /**
