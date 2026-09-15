@@ -1,3 +1,4 @@
+import { createCctvVideoSurface } from './cctvVideo.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -164,42 +165,18 @@ export function _renderCctvState(state) {
     }
   }
 
-  // Live video: for HLS cameras, paint the active camera's decoded <video>
-  // element onto a canvas each frame (one decoder, two surfaces — the plane
-  // reads the same element). The loop rides through hls.js pipeline resets
-  // (a null element or unchanged currentTime is a skipped frame, not an exit)
-  // and self-stops when the card hides or the feed goes away. The still-image
-  // path below is suppressed while a live feed is showing.
   const liveIntent = enabled && !!activeCamera?.isVideo;
   if (this._cctvVideo) {
     this._cctvVideo.hidden = !liveIntent;
     if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
-    this._cctvVideoActive = liveIntent;
-    if (liveIntent && !this._cctvVideoRaf) {
-      const canvas = this._cctvVideo;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      let lastTime = -1;
-      const paint = () => {
-        if (this.destroyed || !this._cctvVideoActive) {
-          this._cctvVideoRaf = 0;
-          return;
-        }
-        const v = this.cctv.getActiveVideoElement();
-        if (v && v.currentTime !== lastTime) {
-          lastTime = v.currentTime;
-          if (
-            canvas.width !== v.videoWidth ||
-            canvas.height !== v.videoHeight
-          ) {
-            canvas.width = v.videoWidth;
-            canvas.height = v.videoHeight;
-          }
-          ctx.drawImage(v, 0, 0);
-        }
-        this._cctvVideoRaf = requestAnimationFrame(paint);
-      };
-      this._cctvVideoRaf = requestAnimationFrame(paint);
+    const visible = liveIntent && !document.hidden && !this._cctvPanel?.classList.contains('collapsed');
+    if (!visible || this._cctvVideoCameraId !== activeId) {
+      this._cctvVideoSurface?.stop();
+      this._cctvVideoSurface = null;
+    }
+    this._cctvVideoCameraId = activeId;
+    if (visible && !this._cctvVideoSurface) {
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () => this.cctv.getActiveVideoElement?.());
     }
   }
 

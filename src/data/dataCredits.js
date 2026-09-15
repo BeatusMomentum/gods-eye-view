@@ -137,6 +137,10 @@ export const DATA_CREDITS = [
       '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
   },
   {
+    key: 'deldot-cctv',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +

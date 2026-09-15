@@ -3621,3 +3621,19 @@ releases imagery layers/listeners on replacement. Destroy invalidates pending
 work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
+
+
+## Live CCTV integration candidate (#489)
+
+Daniel Slay's shared-decoder panel/projection feature is adapted to bounded
+HTTP(S) HLS. DelDOT uses official HTTPS HLS URLs; RTMP/ffmpeg remux is excluded
+because subprocess transport does not inherit the Node redirect policy. Server
+sessions reserve synchronously, cap memory and response bytes, reject redirects,
+and abort on release/shutdown. No disk store or background sweep exists while
+inactive. The panel paints the same video at at most 640px/15 fps; collapse stops
+its paint loop. Camera deactivation destroys the decoder, and fatal playback
+errors revert to the labeled frame fallback. Camera changes clear the old panel
+frame. hls.js is imported only when an HLS camera starts. Two live sessions may
+coexist with at most eight independent consumer leases each; no-access lease
+expiry is 15 seconds. Closing one consumer leaves other consumers running. Encrypted/fMP4/byte-range playlists fail
+closed. Performance and live agency reliability require recorded validation.

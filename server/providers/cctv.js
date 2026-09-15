@@ -1,5 +1,3 @@
-import path from 'node:path';
-import { promises as fsp } from 'node:fs';
 import { createCctvCatalog } from './cctv/catalog.js';
 import {
   normalizeFeedType,
@@ -19,7 +17,7 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
-import { createHlsPuller, createHlsRemuxer } from './cctv/stream.js';
+import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -45,7 +43,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
-  const remuxer = createHlsRemuxer();
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -136,7 +133,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     server.httpServer?.on('close', () => {
       puller.shutdown();
 
-      remuxer.shutdown();
     });
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
@@ -205,133 +201,56 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          // /media/<id> is the playlist (or the whole media for non-HLS feeds);
-
-          // /media/<id>/<file> is a playlist- or segment-relative sub-path.
-
-          const mediaPath = url.pathname.replace('/media/', '');
-
-          const slash = mediaPath.indexOf('/');
-
-          const cameraId =
-            decodeURIComponent(
-              (slash === -1 ? mediaPath : mediaPath.slice(0, slash)).trim(),
-            ) || 'camera';
-
-          const rel = slash === -1 ? '' : mediaPath.slice(slash + 1);
-
+          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(url.pathname);
+          if (!match) { res.writeHead(404); res.end(); return; }
+          const cameraId = decodeURIComponent(match[1]);
           const source = sourceById.get(cameraId);
-
           const mediaUrl = source?.url || '';
-
           const feedType = normalizeFeedType(source?.feedType || 'image');
-
-          // HLS feeds are served from a proxy-owned segment store with a
-
-          // proxy-generated playlist, so upstream session churn never reaches
-
-          // the browser. http(s) .m3u8 upstreams use the Node puller; RTMP and
-
-          // other stream kinds use ffmpeg when it is available. Anything else
-
-          // falls through to the direct proxy below.
-
-          const hlsStrategy =
-            feedType === 'hls' &&
-            mediaUrl &&
-            /^(https?|rtmps?|rtmpt):\/\//i.test(mediaUrl)
-              ? /\.m3u8(\?|$)/i.test(mediaUrl)
-                ? puller
-                : remuxer.isAvailable()
-                  ? remuxer
-                  : null
-              : null;
-
-          if (hlsStrategy) {
-            const entry = await hlsStrategy.ensure(cameraId, mediaUrl);
-
-            const safe = path.basename(rel || 'out.m3u8');
-
-            const isPlaylist = safe.endsWith('.m3u8');
-
-            const starting = () => {
-              res.writeHead(503, {
-                'Content-Type': 'application/json',
-
-                'Cache-Control': 'no-store',
-
-                'Retry-After': '2',
-              });
-
-              res.end(JSON.stringify({ error: 'Stream starting' }));
-            };
-
-            if (isPlaylist) {
-              if (!(await hlsStrategy.waitReady(entry))) {
-                starting();
-
-                return;
-              }
-
-              const playlist = await hlsStrategy.buildPlaylist(entry, cameraId);
-
-              if (!playlist) {
-                starting();
-
-                return;
-              }
-
-              setHealth(cameraId, {
-                status: 'ok',
-
-                sourceKind: 'live',
-
-                label: source?.provider || 'Configured source',
-
-                message: 'Live stream connected',
-              });
-
-              res.writeHead(200, {
-                'Content-Type': 'application/vnd.apple.mpegurl',
-
-                'Cache-Control': 'no-store',
-
-                'X-CCTV-Source':
-                  hlsStrategy === puller ? 'hls-pull' : 'ffmpeg-remux',
-              });
-
-              res.end(playlist);
-
+          const leaseId = url.searchParams.get('lease');
+          if (feedType === 'hls' && !/^[a-f0-9-]{36}$/i.test(leaseId || '')) { res.writeHead(400); res.end(); return; }
+          if (req.method === 'DELETE') {
+            if (leaseId) puller.release(cameraId, leaseId);
+            res.writeHead(204); res.end(); return;
+          }
+          if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
+          if (feedType === 'hls') {
+            if (!/^https?:\/\//i.test(mediaUrl) || !/\.m3u8(?:\?|$)/i.test(mediaUrl)) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'This stream requires an unsupported transport; use the frame fallback' }));
               return;
             }
-
-            try {
-              entry.lastAccess = Date.now();
-
-              const buf = await fsp.readFile(path.join(entry.dir, safe));
-
-              res.writeHead(200, {
-                'Content-Type': 'video/mp2t',
-
-                'Cache-Control': 'no-store',
-
-                'X-CCTV-Source':
-                  hlsStrategy === puller ? 'hls-pull' : 'ffmpeg-remux',
-              });
-
-              res.end(buf);
-            } catch {
-              res.writeHead(404, {
-                'Content-Type': 'application/json',
-
-                'Cache-Control': 'no-store',
-              });
-
-              res.end(JSON.stringify({ error: 'Segment not found' }));
+            if (match[2]) {
+              const body = puller.getSegment(cameraId, url.searchParams.get('session'), Number(match[3]), leaseId);
+              res.writeHead(body ? 200 : 404, { 'Content-Type': 'video/mp2t', 'Cache-Control': 'no-store' });
+              res.end(body || undefined); return;
             }
-
+            const downstream = watchDownstreamClose(res);
+            let entry;
+            const cancelPending = () => { if (entry) puller.release(cameraId, leaseId); };
+            try {
+              entry = await puller.ensure(cameraId, mediaUrl, leaseId);
+              if (downstream.closed) { cancelPending(); return; }
+              downstream.signal.addEventListener('abort', cancelPending, { once: true });
+              if (!(await puller.waitReady(entry, downstream.signal))) throw new Error('Stream unavailable');
+              const playlist = await puller.buildPlaylist(entry, cameraId, leaseId);
+              if (downstream.closed) return;
+              if (!playlist) throw new Error('Stream unavailable');
+              setHealth(cameraId, { status: 'ok', sourceKind: 'live', label: source?.provider || 'Configured source', message: 'Live HLS connected' });
+              res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store', 'X-CCTV-Source': 'hls-pull', 'X-CCTV-Session': entry.token });
+              res.end(playlist);
+            } catch {
+              setHealth(cameraId, { status: 'degraded', sourceKind: 'fallback', label: source?.provider || 'Configured source', message: 'Live HLS unavailable' });
+              if (!downstream.closed) {
+                res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '2' });
+                res.end(JSON.stringify({ error: 'Live stream unavailable' }));
+              }
+            } finally {
+              downstream.signal.removeEventListener('abort', cancelPending);
+            }
             return;
           }
+          if (match[2] || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
 
           if (!mediaUrl || !/^https?:\/\//i.test(mediaUrl)) {
             setHealth(cameraId, {

@@ -1603,12 +1603,13 @@ export async function loadDelDOTSourcesFromOpenData() {
     const resp = await fetch(DELDOT_CCTV_URL, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      redirect: 'error',
     });
     if (!resp.ok) {
       console.warn('[CCTV] DelDOT source download failed:', resp.status);
       return [];
     }
-    const payload = await resp.json();
+    const payload = await readResponseJsonCapped(resp, 2 * 1024 * 1024);
     const rows = Array.isArray(payload?.videoCameras)
       ? payload.videoCameras
       : [];
@@ -1623,12 +1624,14 @@ export async function loadDelDOTSourcesFromOpenData() {
       // Delaware bounding box — a bad upstream coord can't place a camera out of state.
       if (lat < 38.4 || lat > 39.9 || lon < -75.85 || lon > -75.0) continue;
 
-      // Official-host pin: RTMP-over-HTTP (rtmpt:80) is the steady transport.
-      const streamUrl = String(row?.urls?.rtmp || '');
-      if (!streamUrl.startsWith('rtmpt://video.deldot.gov:80/live/')) continue;
+      // Prefer the catalog's HTTPS HLS transport; no subprocess is required.
+      let stream;
+      try { stream = new URL(String(row?.urls?.m3u8s || '')); } catch { continue; }
+      if (stream.origin !== 'https://video.deldot.gov' || stream.username || stream.password || !/^\/live\/[A-Za-z0-9_.-]+\/playlist\.m3u8$/.test(stream.pathname)) continue;
+      const streamUrl = stream.href;
 
       const id = String(row?.id || '').trim();
-      if (!id) continue;
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) continue;
       const cameraId = `deldot-${id.toLowerCase()}`;
       const title = String(row?.title || '').trim();
 
@@ -1657,10 +1660,10 @@ export async function loadDelDOTSourcesFromOpenData() {
         fovDeg: hasHeading ? 56 : 44,
         rangeM: hasHeading ? 210 : 145,
         mountHeightM: hasHeading ? 10 : 8,
-        groundElevationM: 10, // Delaware is near sea level and flat.
+        groundElevationM: 10, // Estimated prior; client ground resolution owns placement.
         feedType: 'hls',
         url: streamUrl,
-        snapshotUrl: streamUrl,
+        snapshotUrl: '',
         sourceKind: 'deldot-open-data',
         license: 'Public DelDOT traffic camera',
       });

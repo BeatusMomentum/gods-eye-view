@@ -675,5 +675,11 @@
   "src/search/nominatim.test.mjs",
   "src/sources/httpBody.js",
   "src/sources/overpass.js",
-  "src/sources/nominatim.js"
+  "src/sources/nominatim.js",
+  "server/providers/cctv/stream.js",
+  "src/data/cctvHlsStream.test.mjs",
+  "src/layers/cctv/videoPlayback.js",
+  "src/layers/cctv/videoPlayback.test.mjs",
+  "src/ui/cctvVideo.js",
+  "src/ui/cctvVideo.test.mjs"
 ]

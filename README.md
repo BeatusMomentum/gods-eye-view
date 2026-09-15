@@ -434,28 +434,22 @@ OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth cred
 </details>
 
 <details>
-<summary>Live video cameras (HLS / RTMP)</summary>
+<summary>Live video cameras (HLS)</summary>
 
-CCTV sources with `"feedType": "hls"` play as continuous video instead of
-refreshed stills. The server owns the stream: it keeps one upstream session
-per active camera, serves the browser a locally generated playlist, and the
-client plays it through hls.js. Two upstream strategies, chosen by URL:
+CCTV sources with `"feedType": "hls"` and a registered HTTP(S) `.m3u8`
+URL play through a lazily loaded hls.js decoder shared by the monitor plane
+and panel. DelDOT uses its official HTTPS HLS catalog links. Disable that
+pack with `CCTV_DELDOT_ENABLED=0`.
 
-- **`.m3u8` upstreams** are pulled directly in Node — no extra dependencies.
-- **RTMP and other stream URLs** go through **ffmpeg** (`-c copy`, no
-  re-encode), which is optional: without it those cameras fall back to the
-  stills path and everything else is unchanged. If you self-host in Docker,
-  add `ffmpeg` to your image.
-
-The DelDOT Delaware pack is the working example — every `Active` camera in
-DelDOT's public catalog registers with its `rtmpt://video.deldot.gov:80/…`
-stream (the same stream as `rtmp://…:1935`, tunneled over HTTP, so it works
-where port 1935 is blocked). `CCTV_DELDOT_ENABLED=0` turns the pack off.
-
-Some agencies restart their streams on a timer or run encoders whose clock
-lags real time (DelDOT does both). The pipeline absorbs that automatically —
-a brief hitch at a restart, and a playback-rate governor that holds the
-stream a few seconds behind live so it never starves. Nothing to configure.
+The server allows two concurrent sessions. Each retains at most 12 segments
+and 24 MiB in memory; individual downloads are capped at 4 MiB with a ten
+second deadline. There are no segment files or ffmpeg processes. Redirects,
+off-origin references, encrypted playlists and non-MPEG-TS segments are refused.
+Each decoder has its own client lease (at most eight per session), including
+native HLS. Closing it releases only that lease; abandoned leases expire after
+15 seconds without access. The last release stops upstream work. Failed live video
+uses the existing still/Street View/synthetic fallback, which is not live video.
+RTMP-only sources are not supported by this integration.
 
 </details>
 

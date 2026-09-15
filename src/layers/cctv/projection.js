@@ -1,3 +1,4 @@
+import { attachCctvVideo } from './videoPlayback.js';
 import * as Cesium from 'cesium';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
@@ -168,79 +169,6 @@ export function createProjection({
    * @returns {Object|null} Projection runtime, or null if no viewer.
    */
 
-  async function attachVideoSource(runtime, url, feedType) {
-    const video = runtime?.video;
-    if (!video) return;
-    if (feedType !== 'hls') {
-      video.src = url;
-      return;
-    }
-    try {
-      const { default: Hls } = await import('hls.js');
-      if (runtime.disposed || runtime.video !== video) return;
-      if (!Hls.isSupported()) {
-        video.src = url;
-        return;
-      }
-      const hls = new Hls({
-        lowLatencyMode: false,
-        enableWorker: true,
-        liveSyncDurationCount: 5,
-        liveMaxLatencyDurationCount: 6,
-        maxBufferLength: 60,
-        backBufferLength: 30,
-      });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data?.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // reread master for a fresh session
-          console.warn(
-            '[Data:CCTV] hls network error, reloading source:',
-            data.details,
-          );
-          setTimeout(() => {
-            if (runtime.hls === hls) hls.loadSource(url);
-          }, 2000);
-          return;
-        }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls.recoverMediaError();
-          return;
-        }
-        console.warn('[Data:CCTV] hls fatal:', data.type, data.details);
-        hls.destroy();
-        if (runtime.hls === hls) runtime.hls = null;
-      });
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      runtime.hls = hls;
-
-      // Rate governor: DelDOT cameras deliver ~52 s of content per 60 s wall
-      // time. Hold playbackRate by buffer depth so the stream never starves;
-      // cameras with honest clocks sit at 1.0 and never leave it.
-      const governor = setInterval(() => {
-        if (runtime.video !== video || !runtime.hls) {
-          clearInterval(governor);
-          return;
-        }
-        const b = video.buffered;
-        if (!b.length) return;
-        const ahead = b.end(b.length - 1) - video.currentTime;
-        let rate = 1.0;
-        if (ahead < 15) rate = 0.75;
-        else if (ahead < 20) rate = 0.85;
-        else if (ahead < 30) rate = 0.93;
-        else if (ahead > 40) rate = 1.05;
-        if (Math.abs(video.playbackRate - rate) > 0.01)
-          video.playbackRate = rate;
-      }, 1000);
-      runtime.rateGovernor = governor;
-    } catch (error) {
-      console.warn('[Data:CCTV] hls.js unavailable:', error?.message || error);
-      video.src = url;
-    }
-  }
-
   function createProjectionRuntime(record) {
     if (!layerState._viewer) return null;
     const canvas = document.createElement('canvas');
@@ -291,9 +219,6 @@ export function createProjection({
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      video.addEventListener('canplay', () => {
-        video.play().catch(() => {});
-      });
       // Cesium sizes the video texture from the element's width/height
       // attributes at first upload. Set them from the real stream dimensions
       // and rebind on any resolution change (camera switch, adaptive source).
@@ -308,12 +233,20 @@ export function createProjection({
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
       runtime.video = video;
-      runtime.hls = null;
-      attachVideoSource(
-        runtime,
-        parts.frames.mediaUrlFor(record.camera),
-        feedType,
-      );
+      runtime.playback = attachCctvVideo(video, parts.frames.mediaUrlFor(record.camera), feedType, {
+        onFailure: () => {
+          if (runtime.disposed) return;
+          runtime.video = null;
+          runtime.mode = 'image';
+          runtime.image = new Image();
+          runtime.image.decoding = 'async';
+          runtime.image.onload = () => { runtime.imageLoading = false; runtime.imageReady = true; runtime.imageStamp = Date.now(); };
+          runtime.image.onerror = () => { runtime.imageLoading = false; runtime.imageReady = false; };
+          runtime.planeMaterial.image = runtime.canvas;
+          parts.frames.refreshProjectionImage(record, true);
+          parts.presentation.notifyListeners();
+        },
+      });
     } else {
       const img = new Image();
       img.decoding = 'async';
@@ -361,7 +294,7 @@ export function createProjection({
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
-    if (record.projection) return record.projection;
+    if (record.projection && !record.projection.disposed) return record.projection;
     const runtime = createProjectionRuntime(record);
     record.projection = runtime;
     if (runtime) {
@@ -377,16 +310,11 @@ export function createProjection({
    */
 
   function destroyProjectionRuntime(runtime) {
-    if (!runtime) return;
+    if (!runtime || runtime.disposed) return;
     runtime.disposed = true;
-    if (runtime.hls) {
-      runtime.hls.destroy();
-      runtime.hls = null;
-    }
-    if (runtime.rateGovernor) {
-      clearInterval(runtime.rateGovernor);
-      runtime.rateGovernor = null;
-    }
+    runtime.playback?.dispose();
+    runtime.playback = null;
+    if (runtime.image) { runtime.image.onload = null; runtime.image.onerror = null; runtime.image.src = ''; }
     if (runtime.video) {
       runtime.video.pause();
       runtime.video.removeAttribute('src');
@@ -423,10 +351,7 @@ export function createProjection({
       const active = parts.selection.getActiveRecord();
       if (layerState._enabled && layerState._showProjection && active) {
         ensureProjectionRuntime(active);
-        if (active.projection?.video) {
-          active.projection.video.play().catch(() => {});
-        }
-        if (active.projection) {
+        if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
           parts.frames.refreshProjectionTextures(active);
         }
@@ -460,6 +385,7 @@ export function createProjection({
    * @returns {HTMLVideoElement|null}
    */
   function getActiveVideoElement() {
+    if (!layerState._enabled) return null;
     return parts.selection.getActiveRecord()?.projection?.video || null;
   }
 
@@ -468,12 +394,14 @@ export function createProjection({
       if (!record.projection?.video) continue;
       if (
         record.camera.id === activeId &&
-        layerState._enabled &&
-        layerState._showProjection
+        layerState._enabled
       ) {
         record.projection.video.play().catch(() => {});
       } else {
-        record.projection.video.pause();
+        const runtime = record.projection;
+        destroyProjectionRuntime(runtime);
+        record.projection = null;
+        layerState._projectionEntities = layerState._projectionEntities.filter((entry) => entry !== runtime);
       }
     }
   }
