@@ -735,5 +735,16 @@
   "src/sources/overpassFeatures.test.mjs",
   "src/data/cctvHlsStream.test.mjs",
   "src/layers/cctv/videoPlayback.test.mjs",
-  "src/ui/cctvVideo.test.mjs"
+  "src/ui/cctvVideo.test.mjs",
+  "src/director/clock.test.mjs",
+  "src/director/timeline.test.mjs",
+  "src/scenes/packs/registry.test.mjs",
+  "scripts/qa-director-timing.mjs",
+  "src/director/document.test.mjs",
+  "src/director/camera.test.mjs",
+  "src/scenes/cameraMotion.test.mjs",
+  "scripts/qa-director-camera.mjs",
+  "src/director/packs/packs.test.mjs",
+  "scripts/qa-director-packs.mjs",
+  "src/scenes/dataPacks/presentation.test.mjs"
 ]

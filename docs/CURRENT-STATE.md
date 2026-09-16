@@ -6,6 +6,20 @@ Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-
 
 Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records (default 2,000 per new layer, core satellite rows before dense extras); omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
 
+Director version-5 documents add scene-local data-pack manifests and per-shot
+selection. Registered sources acquire bounded, cancellable assets separately from
+GeoJSON, PNG and manually played media presentation. Storage paths, attribution
+and geographic placement remain distinct; Stop/replacement releases resources.
+Import acquires nothing. See [data packs](DIRECTOR-DATA-PACKS.md). Existing scene
+content, assets and credit remain unchanged.
+
+Director version-4 documents add named geographic anchors and optional explicit
+camera moves with easing, duration and holds. Playback and seek share one
+coordinate sampler; navigation/manual input revokes authored motion and pending
+holds. Anchor heights and explicit endpoints require the WGS84 ellipsoid
+reference. Legacy projects retain their ordinary flights, content and edits.
+See [camera directions](DIRECTOR-CAMERA.md).
+
 Realtime voice composes separate connection, response/tool, Radio handoff, input
 and audio-meter, cost, viewport-context and diagnostic owners. The existing
 controller exports and session/backend contracts remain available. Tool protocol,
@@ -27,8 +41,15 @@ Director's ordered shot runner is exported independently of rendering, UI,
 storage and scene content. The existing scene controller supplies an adapter for
 visual/layer state, camera travel, media holds and release. Playback cancellation,
 preview cleanup, saved projects and all scene assets/attribution are preserved.
-Timeline extraction and a shareable scene/data-pack format are planned in
-[Director](DIRECTOR.md); those follow-up capabilities are not implemented yet.
+Pure authored-time/seek calculations and a playback clock now own timing,
+hold deadlines and subscriptions. Stop immediately clears timers and settles
+holds; stale tick callbacks cannot publish into a replacement. Registered pack
+rules own presentation overrides and Nepal map fallback without changing saved
+shots or content. Scene-document validation and legacy migration now have separate
+owners. Invalid imports preserve the current project; unreadable saved projects
+are protected from fallback writes. Version 5 is the export format, with
+zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+interactions remain planned in [Director](DIRECTOR.md).
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Default providers, footprints, road directions, exact-viewport retries and source attribution are unchanged.
 

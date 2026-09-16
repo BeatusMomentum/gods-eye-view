@@ -4,6 +4,25 @@ Add feed provenance to analyst/view answers and HUD context while retaining exis
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
 
+- Director scene documents now support bounded data-pack manifests, per-shot
+  selection and registered GeoJSON/PNG/media loaders with explicit placement,
+  visible attribution and cancellation/disposal on Stop or replacement.
+
+- Director version 4 adds named camera anchors and explicit pose-to-pose moves
+  with shared playback/seek interpolation, easing and holds. Navigation and
+  manual input cancel authored motion; older scene files retain existing flights.
+
+
+- Director validates bounded version-3 scene files before replacing a project,
+  preserves unreadable browser saves, migrates legacy bloom once and preserves
+  zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
+
+
+- Separate Director timing, seek calculations, playback clocks and registered
+  scene-pack presentation rules. Preserve authored content and controls; Stop
+  releases pending hold timers and stale ticks cannot affect replacement playback.
+
+
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
 - Separate Realtime connection, response/tool, Radio, input/audio, cost, viewport

@@ -96,3 +96,29 @@ const SHOT_PHASES = [
   'hold',
   'completeShot',
 ];
+
+export {
+  sceneTimingForShot,
+  sceneSeekState,
+  cameraAtProgress,
+} from './timeline.js';
+export { createPlaybackClock } from './clock.js';
+
+export {
+  parseSceneDocument,
+  validateSceneDocument,
+  stringifySceneDocument,
+  SceneDocumentError,
+  SCENE_DOCUMENT_VERSION,
+  SCENE_DOCUMENT_LIMITS,
+} from './document.js';
+
+export {
+  resolveCameraPose,
+  resolveCameraMove,
+  sampleCameraMove,
+} from './camera.js';
+
+export { createAssetDirectorySource } from './packs/source.js';
+export { createDataPackSession } from './packs/session.js';
+export { validateDataPack, PACK_LIMITS } from './packs/manifest.js';

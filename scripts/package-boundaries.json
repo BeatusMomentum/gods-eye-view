@@ -623,7 +623,19 @@
   },
   "director": {
     "exports": ["./director"],
-    "modules": ["src/director/playback.js"],
+    "modules": [
+      "src/director/playback.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/director/document.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js"
+    ],
     "external": []
   },
   "scenes": {
@@ -644,7 +656,26 @@
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
-      "src/contextModePolicy.js"
+      "src/contextModePolicy.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/scenes/shotPresentation.js",
+      "src/scenes/packs/registry.js",
+      "src/scenes/packs/defaults.js",
+      "src/scenes/packs/nepal.js",
+      "src/director/document.js",
+      "src/scenes/project.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/scenes/cameraMotion.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js",
+      "src/scenes/dataPacks/controller.js",
+      "src/scenes/dataPacks/presentation.js",
+      "src/scenes/dataPacks/geometry.js"
     ],
     "external": ["cesium"]
   },
@@ -1757,7 +1788,26 @@
       "src/voice/realtimeFacade.js",
       "src/voice/realtimeRadio.js",
       "src/voice/realtimeTurns.js",
-      "src/voice/realtimeConnection.js"
+      "src/voice/realtimeConnection.js",
+      "src/director/clock.js",
+      "src/director/timeline.js",
+      "src/scenes/shotPresentation.js",
+      "src/scenes/packs/registry.js",
+      "src/scenes/packs/defaults.js",
+      "src/scenes/packs/nepal.js",
+      "src/director/document.js",
+      "src/scenes/project.js",
+      "src/director/documentFields.js",
+      "src/director/cameraDocument.js",
+      "src/director/camera.js",
+      "src/scenes/cameraMotion.js",
+      "src/director/packs/source.js",
+      "src/director/packs/session.js",
+      "src/director/packs/geojson.js",
+      "src/director/packs/manifest.js",
+      "src/scenes/dataPacks/controller.js",
+      "src/scenes/dataPacks/presentation.js",
+      "src/scenes/dataPacks/geometry.js"
     ],
     "external": [
       "hls.js",
@@ -2230,7 +2280,11 @@
   },
   "ui-navigation": {
     "exports": ["./ui/navigation"],
-    "modules": ["src/navigationPolicy.js", "src/ui/navigationController.js"],
+    "modules": [
+      "src/navigationPolicy.js",
+      "src/ui/navigationController.js",
+      "src/app/stateChannel.js"
+    ],
     "external": ["cesium"]
   },
   "ui-share-restoration": {
