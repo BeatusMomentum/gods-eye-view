@@ -182,7 +182,11 @@ export function mergeMilitaryFragments(records, aliases = new Map()) {
         fragments[i].tileEpsilon || 1e-8,
         fragments[j].tileEpsilon || 1e-8,
       );
+      const knownId = aliases.get(fragments[i].featureKey || fragments[i].id);
       if (
+        (knownId &&
+          knownId ===
+            aliases.get(fragments[j].featureKey || fragments[j].id)) ||
         (fragments[i].featureKey &&
           fragments[i].featureKey === fragments[j].featureKey) ||
         touches(fragments[i], fragments[j], eps)
@@ -197,11 +201,16 @@ export function mergeMilitaryFragments(records, aliases = new Map()) {
   });
   const merged = [...groups.values()].map((group) => {
     const keys = [...new Set(group.map((r) => r.featureKey || r.id))].sort();
-    const prior = keys
-      .map((k) => aliases.get(k))
-      .filter(Boolean)
-      .sort()[0];
-    const id = prior || `ofm:installation:${keys[0]}`;
+    const priorIds = new Set(
+      keys.map((key) => aliases.get(key)).filter(Boolean),
+    );
+    const id = [...priorIds].sort()[0] || `ofm:installation:${keys[0]}`;
+    // A bridge can join groups while some of their parcels are offscreen.
+    // Keep those retained aliases canonical too, so a later pan cannot split the identity.
+    if (priorIds.size > 1)
+      for (const [key, prior] of aliases) {
+        if (priorIds.has(prior)) aliases.set(key, id);
+      }
     for (const key of keys) {
       aliases.delete(key);
       aliases.set(key, id);

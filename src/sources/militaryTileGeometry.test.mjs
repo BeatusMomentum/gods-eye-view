@@ -75,3 +75,31 @@ test('holes remain holes and disconnected pieces of one mapped feature have one 
     !(m.longitude > 1 && m.longitude < 3 && m.latitude > 1 && m.latitude < 3),
   );
 });
+
+test('a pan that hides connecting parcels keeps one marker with its known installation id', () => {
+  const aliases = new Map();
+  const a = record('a', ring(0, 0, 1, 1));
+  const bridge = record('bridge', ring(1, 0, 2, 1));
+  const b = record('b', ring(2, 0, 3, 1));
+  const [full] = mergeMilitaryFragments([a, bridge, b], aliases);
+  const pan = mergeMilitaryFragments([a, b], aliases);
+  assert.equal(pan.length, 1);
+  assert.equal(pan[0].id, full.id);
+  assert.equal(pan[0].footprints.length, 2);
+});
+
+test('joining known groups also updates aliases for their currently offscreen parcels', () => {
+  const aliases = new Map();
+  const a = record('a', ring(0, 0, 1, 1));
+  const b = record('b', ring(2, 0, 3, 1));
+  const c = record('c', ring(3, 0, 4, 1));
+  assert.equal(mergeMilitaryFragments([a, b, c], aliases).length, 2);
+  const [joined] = mergeMilitaryFragments(
+    [a, record('bridge', ring(1, 0, 2, 1)), b],
+    aliases,
+  );
+  assert.equal(aliases.get('c'), joined.id);
+  const pan = mergeMilitaryFragments([a, c], aliases);
+  assert.equal(pan.length, 1);
+  assert.equal(pan[0].id, joined.id);
+});
