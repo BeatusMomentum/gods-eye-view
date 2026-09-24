@@ -1,4 +1,5 @@
 import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import { mergeMilitaryFragments } from '../../sources/militaryTileGeometry.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
 import {
   isUnavailableCapability,
@@ -20,29 +21,36 @@ export function createInstallationSource({
   mapTiles = createOpenFreeMapSource({ fetchImpl }),
 } = {}) {
   let overpassUnavailable = false;
+  const installationIds = new Map();
   async function getTileSites(box, signal) {
-    let zoom = 12;
+    let zoom =
+      Math.max(box.north - box.south, box.east - box.west) > 0.2 ? 10 : 12;
     while (zoom > 6 && tilesForBounds(box, zoom, { maxTiles: 17 }).length > 16)
       zoom -= 1;
     const result = await mapTiles.fetchBounds(box, { zoom, signal });
+    const fragments = result.tiles.flatMap((tile) => tile.military);
     const retrievedAt = new Date().toISOString();
     return {
-      records: result.tiles
-        .flatMap((tile) => tile.military)
-        .map((record) => ({
-          ...record,
-          retrievedAt,
-          sources: record.sources.map((source) => ({ ...source, retrievedAt })),
-        })),
+      records: mergeMilitaryFragments(
+        fragments.slice(0, 2048),
+        installationIds,
+      ).map((record) => ({
+        ...record,
+        retrievedAt,
+        sources: record.sources.map((source) => ({ ...source, retrievedAt })),
+      })),
       status: 'ready',
       droppedCount: 0,
-      saturated: result.partial,
+      saturated: result.partial || fragments.length > 2048,
       source: 'OpenStreetMap tiles',
       tileSource: true,
     };
   }
   return {
-    destroy: () => mapTiles.clear(),
+    destroy() {
+      mapTiles.clear();
+      installationIds.clear();
+    },
     async getMappedSites(box, { exact = false, signal } = {}) {
       const { south, west, north, east } = box || {};
       if (

@@ -1,8 +1,28 @@
 import { createFlowTileSource } from './flowSource.js';
 import { flowSegmentsToRoads } from './flowDecode.js';
+import { tilesForBounds } from '../../data/tomtomTiles.js';
+import { clipTileLine } from '../../sources/openFreeMap.js';
 import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
 import { validTileBounds } from '../../sources/vectorTiles.js';
 export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
+
+/** Shrink only the detail footprint, centered on the look-at fetch box, to fit 16 tiles. */
+export function trafficDetailBounds(box) {
+  const center = {
+    lat: (box.north + box.south) / 2,
+    lon: (box.east + box.west) / 2,
+  };
+  let detail = { ...box };
+  while (tilesForBounds(detail, 14, { maxTiles: 17 }).length > 16) {
+    detail = {
+      south: center.lat + (detail.south - center.lat) * 0.9,
+      north: center.lat + (detail.north - center.lat) * 0.9,
+      west: center.lon + (detail.west - center.lon) * 0.9,
+      east: center.lon + (detail.east - center.lon) * 0.9,
+    };
+  }
+  return detail;
+}
 
 /** Supply tile-derived road geometry and flow availability without Overpass queries. */
 export function createTrafficSource({
@@ -32,14 +52,25 @@ export function createTrafficSource({
           partial: flow.getFlowSessionStats().partial,
         };
       } else {
-        const result = await mapTiles.fetchBounds(box, {
+        const area = majorOnly ? box : trafficDetailBounds(box);
+        const result = await mapTiles.fetchBounds(area, {
           zoom: majorOnly ? 12 : 14,
           signal,
         });
         data = {
-          roads: result.tiles.flatMap((tile) => tile.roads),
+          roads: result.tiles
+            .flatMap((tile) => tile.roads)
+            .flatMap((road) =>
+              clipTileLine(road.coordinates, area).map((coordinates) => ({
+                ...road,
+                coordinates,
+              })),
+            ),
           roadSource: 'OpenStreetMap tiles',
           partial: result.partial,
+          detailLimited:
+            !majorOnly && (area.north !== box.north || area.east !== box.east),
+          detailBounds: majorOnly ? null : area,
         };
       }
       signal?.throwIfAborted();

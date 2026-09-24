@@ -1,6 +1,7 @@
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
 import { createVectorTileSource } from './vectorTiles.js';
+import { clipTileRing, militaryOutlineLines } from './militaryTileGeometry.js';
 import { tileToBBox } from '../data/tomtomTiles.js';
 
 const ROAD_TYPES = Object.freeze({
@@ -143,18 +144,13 @@ export function decodeOpenFreeMapTile(bytes, z, x, y) {
               ? geometry.coordinates
               : [];
         for (let p = 0; p < polygons.length; p++) {
-          const ring = polygons[p][0],
+          const rings = polygons[p]
+            .map((r) => clipTileRing(r, box))
+            .filter((r) => r.length >= 4);
+          const ring = rings[0],
             centroid = polygonCentroid(ring);
           if (!centroid || ring.length < 4) continue;
           const [longitude, latitude] = centroid;
-          // Ignore polygons copied entirely into the buffer of a neighboring tile.
-          if (
-            longitude < box.west ||
-            longitude >= box.east ||
-            latitude < box.south ||
-            latitude >= box.north
-          )
-            continue;
           military.push({
             id: `ofm:${z}/${x}/${y}:${feature.id ?? i}:${p}`,
             kind: 'installation',
@@ -163,6 +159,13 @@ export function decodeOpenFreeMapTile(bytes, z, x, y) {
             latitude,
             longitude,
             footprint: ring,
+            rings,
+            featureKey:
+              feature.id == null
+                ? `tile:${z}/${x}/${y}:${i}`
+                : String(feature.id),
+            tileEpsilon: (box.east - box.west) / feature.extent,
+            outlineLines: rings.flatMap((r) => militaryOutlineLines(r, box)),
             validation: 'unreviewed',
             sources: [{ name: 'OpenStreetMap', id: `tile:${z}/${x}/${y}` }],
           });

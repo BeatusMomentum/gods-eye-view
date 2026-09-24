@@ -220,6 +220,8 @@ export function createIngestion({
     layerState._lastBounds = clamped;
     layerState._lastViewCenter = parts.viewport.getBoundsCenter(clamped);
     let renderedSomething = false;
+    layerState._detailError = null;
+    layerState._detailLimited = false;
 
     let retryable = true;
     try {
@@ -249,6 +251,7 @@ export function createIngestion({
       // FLOW_RENDER_RACE_MS either way; late flow recolors in place.
       if (cache.full && !layerState._liveMode) {
         layerState._roadPartial = false;
+        layerState._detailLimited = Boolean(cache.detailLimited);
         renderedSomething = await parts.flow.applyFlowThenRender(
           cache.full,
           clamped,
@@ -329,6 +332,8 @@ export function createIngestion({
       );
       if (generation !== layerState._loadGeneration) return;
 
+      layerState._detailLimited = Boolean(fullData.detailLimited);
+      cache.detailLimited = layerState._detailLimited;
       cache.full = layerState._parseRoads(fullData, trace);
       cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
         retain: !layerState._roadPartial,
@@ -351,6 +356,10 @@ export function createIngestion({
       layerState._roadRetryStopped = !retryable;
       if (generation === layerState._loadGeneration && !renderedSomething)
         layerState._roadError = 'Road data temporarily unavailable';
+      if (generation === layerState._loadGeneration && renderedSomething) {
+        layerState._detailError = 'Detailed roads unavailable';
+        layerState._roadPartial = true;
+      }
       console.warn('[Data:Traffic] Fetch error:', e);
     } finally {
       if (generation === layerState._loadGeneration) {

@@ -1090,8 +1090,14 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 ## Installations and map-source guidance
 
 - Keyless mapped installations use OpenFreeMap `landuse` military polygons,
-  outline them and label each centroid "Military area"; tiles carry no site names.
-  Zoom adapts from z12 down to z6 to fit the 16-tile view cap. Google Places
+  merge touching parcels and tile fragments into one "Military area" marker;
+  tiles carry no site names. The marker uses an area-weighted centroid, moved
+  inside a footprint when necessary. Source-feature aliases retain ids across
+  pans (4096-entry cap); grouping admits at most 2048 fragments per view and
+  reports saturation if that cap is reached. Tile-buffer geometry is clipped to each core and
+  artificial clipping edges never become outlines. Fills, boundary polylines
+  and markers clamp to the visible globe or photoreal mesh. Wide views start
+  at z10, local views at z12, stepping down to z6 to fit the 16-tile view cap. Google Places
   search/classification stays separate and unchanged. Configured Overpass can
   still supply named sites; a not-configured miss switches to tiles once.
   Retryable tile/configured-upstream failures retain the existing 30–240 second
@@ -3472,7 +3478,11 @@ Street Traffic and ALPR never use Overpass. Installations switch once to vector
 tiles after a capability miss. Annotation and location-feature sources retain
 a distinct unavailable result and stop querying for that source lifetime.
 `scripts/qa-overpass-offload.mjs <dev-url>` checks Austin road dots, ALPR,
-Camp Mabry markers/outlines and zero browser requests to Overpass/Nominatim;
+Camp Mabry markers/outlines, at most 12 Fort Cavazos installation markers,
+and zero browser requests to external Overpass/Nominatim hosts. It waits for
+visible photoreal tilesets, dismisses first launch and measures at least 150
+street-view dots within -3/+25 m of sampled mesh height, for both TomTom and
+Google 3D with OpenFreeMap roads (an isolated page overrides only key availability);
 `src/overpassOffload.test.mjs` separately proves server-handler zero egress.
 
 ### Share-link v2 layer state (August 2026)
@@ -4075,19 +4085,36 @@ easier to meet (detection is now on more often), but does not create it.
   sized so a 31-day month stays inside TomTom's 200K/month free allowance),
   decoded client-side and animated directly from the flow segments with
   green/amber/red dot color and speed/density scaling (`trafficFlowStyle.js`);
-  closures spawn no dots. No Overpass road matching is required. Gaps in TomTom
+  closures spawn no dots. Flow stays at z12 with the same 16-tile cap,
+  120-second cache and server daily budget; no higher-zoom flow requests are
+  added. Lines are clipped first to tile cores before caching, then to the
+  existing look-at viewport box before allocating dots. No Overpass road matching is required. Gaps in TomTom
   flow coverage have no road dots; the flow percentage applies to loaded segments,
   not all roads in the viewport. Road fetch bounds center on the camera look-at point (`trafficBounds.js`).
 - Keyless road geometry comes from OpenFreeMap's immutable versioned tiles:
   one TileJSON resolution per application source lifetime, z12 wide pass and
-  z14 detail below 4.5 km. Only drivable OpenMapTiles classes are admitted;
+  z14 detail below 4.5 km. The detail box shrinks around the look-at point
+  until it fits 16 tiles, including at high latitudes; status reports reduced
+  detail coverage. A failed detail pass retains major roads and separately
+  reports "Detailed roads unavailable". Only drivable OpenMapTiles classes are admitted;
   reverse one-way lines are reversed. The shared tile source caps each view at
   16 tiles, four concurrent requests, 4 MiB per response and 64 decoded tiles/
   24 MiB. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
-  fragments are not stitched. Visible-globe roads use its cached terrain heights,
-  avoiding an offscreen 3D height pick for every tile fragment. The road-source label names TomTom or
+  road fragments are not stitched. Both road sources preserve bends and insert
+  waypoints at most 150 m apart, splitting paths at 80 vertices. A cancellable
+  preparation pass waits up to 30 seconds for the visible surface, reads
+  per-vertex terrain/mesh heights in batches of 32, rejects non-finite or
+  out-of-band (+/-9000 m) heights, and floors on cached ground/visible terrain.
+  Shared floor cells are read only; raw mesh samples never enter their cache.
+  Positions and segment distances are precomputed, with no new animation-loop
+  allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names TomTom or
   OpenStreetMap tiles, with partial/unavailable states shown plainly.
+- TileJSON caches successful metadata. Transient failures retry after a
+  five-second cooldown; invalid metadata/origins stay unavailable until the
+  source is cleared. Clear resets metadata and cancels pending requests.
+  Every failed read cancels its body and aborts its owned request, including
+  declared and streaming byte-cap failures.
 - Development captures opened with `?trafficDebug=1` mint an interaction anchor
   from the exact `camera.changed` event that arms each debounced load, then emit
   scheduling-correlated User Timing entries for production `response.json`, road

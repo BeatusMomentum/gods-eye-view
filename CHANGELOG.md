@@ -33,6 +33,18 @@
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
 
+## Unreleased — vector tile rendering fixes
+
+- Concentrate TomTom traffic in the look-at viewport, remove buffered tile
+  duplicates and prepare per-vertex surface heights for TomTom/OpenFreeMap
+  roads. Keep the existing TomTom zoom, tile cap and daily budget.
+- Merge military-area tile fragments into stable installation markers and
+  drape footprints over terrain/Google 3D without tile-edge outlines.
+- Bound high-latitude detail coverage and report detail failures separately;
+  retry transient TileJSON failures and cancel every unsuccessful body read.
+- Extend keyed QA with street-level mesh checks for both road sources,
+  Camp Mabry/Fort Cavazos captures and visible-tileset readiness.
+
 ## Unreleased — local receiver feeds
 
 - The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder

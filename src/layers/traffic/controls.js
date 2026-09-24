@@ -154,7 +154,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
-        error: layerState._roadError || feed.error,
+        error: layerState._roadError || layerState._detailError || feed.error,
+        detailError: layerState._detailError || null,
+        detailLimited: Boolean(layerState._detailLimited),
         flowCoveragePct: layerState._flowCoveragePct,
         tilesFetched: getFlowSessionStats().tilesFetched,
         ...(TRAFFIC_TIMING_ENABLED
@@ -184,7 +186,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         source: layerState._roadSource,
         loadingLabel: layerState._roadError
           ? `UNAVAILABLE · ${layerState._roadSource} · Roads unavailable`
-          : `${layerState._roadSource === 'TomTom' && !loading && !feed.error ? 'LIVE' : feed.loadingLabel} · Roads: ${layerState._roadSource}${layerState._roadPartial ? ' · Partial coverage' : ''}`,
+          : `${layerState._roadSource === 'TomTom' && !loading && !feed.error ? 'LIVE' : feed.loadingLabel} · Roads: ${layerState._roadSource}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
       };
     },
   };

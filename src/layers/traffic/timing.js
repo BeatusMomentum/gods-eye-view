@@ -1,9 +1,6 @@
 import * as Cesium from 'cesium';
-import {
-  TRAFFIC_TIMING_ENABLED,
-  MAX_WAYPOINTS_PER_ROAD,
-  DOT_HEIGHT_OFFSET,
-} from './policy.js';
+import { roadSurfaceChunks } from './surface.js';
+import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
   /**
@@ -254,85 +251,44 @@ export function createTiming({ state: layerState, services, parts, source }) {
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
 
-      const rawCoords = road.coordinates;
-      const simplifyStep =
-        rawCoords.length > MAX_WAYPOINTS_PER_ROAD
-          ? Math.ceil(rawCoords.length / MAX_WAYPOINTS_PER_ROAD)
-          : 1;
-      const coords = [];
-      for (let i = 0; i < rawCoords.length; i += simplifyStep) {
-        coords.push(rawCoords[i]);
-      }
+      for (const coords of roadSurfaceChunks(road.coordinates)) {
+        const type = road.type;
+        const oneway = road.oneway;
 
-      const last = rawCoords[rawCoords.length - 1];
-      const tail = coords[coords.length - 1];
-      if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
-        coords.push(last);
-      }
-      if (coords.length < 2) continue;
-
-      const type = road.type;
-      const oneway = road.oneway;
-
-      let baseHeight = 0;
-      const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
         /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightCalls += 1;
-        _trafficTimingSampledCells.add(
-          `${firstCoord[1].toFixed(3)},${firstCoord[0].toFixed(3)}`,
-        );
+        const _trafficTimingMaterializeStart = performance.now();
         /* TRACE_ONLY_END */
-        const carto = Cesium.Cartographic.fromDegrees(
-          firstCoord[0],
-          firstCoord[1],
-        );
+        const waypoints = coords.map(([lng, lat]) => {
+          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const h =
+            (Number.isFinite(floor) && Math.abs(floor) <= 9000 ? floor : 0) +
+            DOT_HEIGHT_OFFSET;
+          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+        });
+        const segmentDist = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          segmentDist.push(
+            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
+          );
+        }
         /* TRACE_ONLY_BEGIN */
-        const _trafficTimingSampleStart = performance.now();
+        _trafficTimingWaypointMaterializationMs +=
+          performance.now() - _trafficTimingMaterializeStart;
         /* TRACE_ONLY_END */
-        // A visible globe already owns cached terrain heights. A 3D pick here
-        // would render an offscreen scene once for every vector-tile fragment.
-        const sampled = layerState._viewer.scene.globe?.show
-          ? layerState._viewer.scene.globe.getHeight?.(carto)
-          : layerState._viewer.scene.sampleHeight(carto);
-        /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightMs +=
-          performance.now() - _trafficTimingSampleStart;
-        /* TRACE_ONLY_END */
-        if (Number.isFinite(sampled)) baseHeight = sampled;
-      }
 
-      /* TRACE_ONLY_BEGIN */
-      const _trafficTimingMaterializeStart = performance.now();
-      /* TRACE_ONLY_END */
-      const waypoints = coords.map(([lng, lat]) => {
-        const h = baseHeight + DOT_HEIGHT_OFFSET;
-        return Cesium.Cartesian3.fromDegrees(lng, lat, h);
-      });
-      const segmentDist = [];
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        segmentDist.push(
-          Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
-        );
+        roads.push({
+          coords,
+          type,
+          oneway,
+          waypoints,
+          segmentDist,
+          flow: road.flow || null,
+          directFlow: road.directFlow === true,
+          trafficRoadCoverage: road.trafficRoadCoverage ?? null,
+          leftHandTraffic: road.leftHandTraffic === true,
+        });
       }
-      /* TRACE_ONLY_BEGIN */
-      _trafficTimingWaypointMaterializationMs +=
-        performance.now() - _trafficTimingMaterializeStart;
-      /* TRACE_ONLY_END */
-
-      roads.push({
-        coords,
-        type,
-        oneway,
-        waypoints,
-        segmentDist,
-        flow: road.flow || null,
-        directFlow: road.directFlow === true,
-        trafficRoadCoverage: road.trafficRoadCoverage ?? null,
-        leftHandTraffic: road.leftHandTraffic === true,
-      });
     }
-
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingMetrics = {
       roadCount: roads.length,

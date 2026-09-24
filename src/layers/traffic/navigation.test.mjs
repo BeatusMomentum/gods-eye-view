@@ -44,6 +44,7 @@ function setup(t, requestRoads) {
     camera,
     scene: {
       canvas: { width: 100, height: 100 },
+      globe: { show: true, tilesLoaded: true, getHeight: () => 0 },
       preRender: new Cesium.Event(),
       primitives: { add: (value) => value, remove: () => true },
     },

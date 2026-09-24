@@ -7,10 +7,12 @@
  *
  * Flies to Austin at 2 km, enables Street Traffic, Mapped Installations and
  * ALPR, then checks rendered road dots, ALPR entities, and military markers
- * and polygon outlines near Camp Mabry. Records the traffic road-source label
+ * and polygon outlines near Camp Mabry, Fort Cavazos marker deduplication,
+ * and at least 150 street-view dots within -3/+25 m of the surface. Records the traffic road-source label
  * and rejects every browser request to an Overpass host or public Nominatim.
  * Server-side zero egress is separately pinned in src/overpassOffload.test.mjs.
- * Uses real source responses; no provider interception or fabricated records.
+ * Uses real tile responses. A second isolated page overrides only TomTom key
+ * availability to check OpenFreeMap roads on the Google mesh.
  * Screenshots and a JSON result go to qa-shots/ (gitignored). Exits nonzero on
  * a failed assertion. Works against keyed or keyless dev servers.
  */
@@ -22,7 +24,7 @@ import puppeteer from 'puppeteer';
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
   console.log(
-    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful]\nChecks Austin traffic, ALPR, Camp Mabry military areas, source labels and zero browser Overpass/Nominatim requests. Writes qa-shots/.',
+    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl]\nChecks street-level mesh alignment for TomTom/OpenFreeMap, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
   );
   process.exit(0);
 }
@@ -35,6 +37,7 @@ const shots = path.resolve('qa-shots');
 await fs.mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
   headless: !args.includes('--headful'),
+  protocolTimeout: 300_000,
   ...(process.env.PUPPETEER_EXECUTABLE_PATH
     ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
     : {}),
@@ -42,8 +45,9 @@ const browser = await puppeteer.launch({
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--use-gl=angle',
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
+    ...(args.includes('--software-gl')
+      ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+      : []),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -63,6 +67,9 @@ const result = {
 let page;
 try {
   page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => {
+    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+  });
   await page.setViewport({ width: 1440, height: 1000 });
   page.on('request', (request) => {
     const host = new URL(request.url()).hostname.toLowerCase();
@@ -103,7 +110,21 @@ try {
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
+  await page.evaluate(() =>
+    window.__godsEyeView.ui?.setDetection({ enabled: false }),
+  );
+  result.renderer = await page.evaluate(() => {
+    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+    return debug
+      ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+      : gl.getParameter(gl.RENDERER);
+  });
   await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    () => !document.querySelector('#first-run-launcher:not([hidden])'),
+    { timeout: 10_000 },
+  );
   async function fly(lat, lon, height = 2000, heading = 0, pitch = -75) {
     await page.evaluate(
       async (view) => {
@@ -130,14 +151,33 @@ try {
       { lat, lon, height, heading, pitch },
     );
   }
+  async function settleTiles() {
+    await page.waitForFunction(
+      () => {
+        const { scene } = window.__godsEyeView.viewer;
+        if (scene.globe.show) return scene.globe.tilesLoaded;
+        let found = false;
+        for (let i = 0; i < scene.primitives.length; i++) {
+          const primitive = scene.primitives.get(i);
+          if (!primitive.show || typeof primitive.tilesLoaded !== 'boolean')
+            continue;
+          found = true;
+          if (!primitive.tilesLoaded) return false;
+        }
+        return found;
+      },
+      { timeout: 90_000, polling: 500 },
+    );
+  }
   async function shot(name) {
-    // Let tile refinement and temporary height-pick framebuffers settle before capture.
-    await page
-      .waitForFunction(
-        () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-        { timeout: 15_000, polling: 250 },
-      )
-      .catch(() => {});
+    await settleTiles();
+    assert.equal(
+      await page.evaluate(
+        () => !document.querySelector('#first-run-launcher:not([hidden])'),
+      ),
+      true,
+      'first-launch modal dismissed',
+    );
     await page.evaluate(async () => {
       window.__godsEyeView.requestRender('qa-overpass-offload');
       await new Promise((resolve) =>
@@ -210,6 +250,146 @@ try {
   assert.ok(austin.cameraEntities > 0, 'ALPR camera entities rendered');
   assert.match(austin.sourceLabel, /Roads: (TomTom|OpenStreetMap tiles)/);
   await shot('austin');
+  async function checkStreetSurface(name) {
+    await page.evaluate(async () =>
+      window.__godsEyeView.dataManager.setEnabled('traffic', false),
+    );
+    await fly(30.2685, -97.7425, 350, 10, -30);
+    await settleTiles();
+    await page.evaluate(async () =>
+      window.__godsEyeView.dataManager.setEnabled('traffic', true),
+    );
+    await page.waitForFunction(
+      () => {
+        const s = window.__godsEyeView.dataManager.layers
+          .get('traffic')
+          .module.getStats();
+        return s.count > 0 && !s.loading && !s.error;
+      },
+      { timeout: 180_000, polling: 500 },
+    );
+    await settleTiles();
+    const measured = await page.evaluate(async () => {
+      const C = await import('/node_modules/cesium/Build/Cesium/index.js');
+      const { viewer, dataManager } = window.__godsEyeView;
+      const { scene } = viewer;
+      const collections = [];
+      for (let i = 0; i < scene.primitives.length; i++) {
+        const p = scene.primitives.get(i);
+        if (Array.isArray(p._pointPrimitives) && p.show && p.length > 100)
+          collections.push(p);
+      }
+      let inView = 0,
+        onMesh = 0,
+        sampled = 0;
+      const deltas = [];
+      // Freeze the sampled positions: the animator continues while the bounded batches yield.
+      const positions = collections.flatMap((p) =>
+        Array.from({ length: p.length }, (_, i) => p.get(i))
+          .filter((p) => p.show)
+          .map((p) => C.Cartesian3.clone(p.position)),
+      );
+      for (const position of positions) {
+        const screen = C.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          position,
+        );
+        if (
+          !screen ||
+          screen.x < 0 ||
+          screen.x >= scene.canvas.clientWidth ||
+          screen.y < 0 ||
+          screen.y >= scene.canvas.clientHeight
+        )
+          continue;
+        inView++;
+        const carto = C.Cartographic.fromCartesian(position);
+        const height = scene.globe.show
+          ? scene.globe.getHeight(carto)
+          : scene.sampleHeight(carto, collections);
+        if (Number.isFinite(height) && Math.abs(height) <= 9000) {
+          sampled++;
+          const delta = carto.height - height;
+          deltas.push(delta);
+          if (delta >= -3 && delta <= 25) onMesh++;
+        }
+        if (inView % 24 === 0)
+          await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      deltas.sort((a, b) => a - b);
+      return {
+        inView,
+        onMesh,
+        sampled,
+        medianDeltaM: deltas[Math.floor(deltas.length / 2)],
+        stats: dataManager.layers.get('traffic').module.getStats(),
+        photoreal: !scene.globe.show,
+      };
+    });
+    result[name] = measured;
+    console.log(
+      `${name}: ${measured.onMesh}/${measured.inView} projected dots on the surface`,
+    );
+    await shot(name);
+    assert.ok(
+      measured.onMesh >= 150,
+      `${name}: at least 150 projected dots within -3/+25 m of the surface (got ${measured.onMesh})`,
+    );
+  }
+  console.log('Checking street-level traffic against the rendered surface...');
+  await checkStreetSurface('traffic-street');
+  if (
+    result['traffic-street'].photoreal &&
+    result.traffic.roadSource === 'TomTom'
+  ) {
+    // A second isolated page models Google configured / TomTom absent. Geometry and mesh are real responses.
+    const keyedPage = page;
+    page = await browser.newPage();
+    await page.setViewport({ width: 1440, height: 1000 });
+    await page.evaluateOnNewDocument(() => {
+      sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+      const original = window.fetch;
+      window.fetch = (input, init) =>
+        new URL(typeof input === 'string' ? input : input.url, location.href)
+          .pathname === '/api/tomtom/status'
+          ? Promise.resolve(
+              new Response(JSON.stringify({ hasKey: false }), {
+                headers: { 'content-type': 'application/json' },
+              }),
+            )
+          : original(input, init);
+    });
+    page.on('pageerror', (error) => result.errors.push(error.message));
+    page.on('request', (request) => {
+      const host = new URL(request.url()).hostname.toLowerCase();
+      if (host.includes('overpass') || host === 'nominatim.openstreetmap.org')
+        result.forbiddenRequests.push(request.url());
+    });
+    await page.goto(navigationUrl.href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
+    await page.waitForFunction(
+      () =>
+        window.__godsEyeView?.dataManager &&
+        document.getElementById('loading-screen')?.classList.contains('hidden'),
+      { timeout: 90_000 },
+    );
+    await page.evaluate(
+      () => window.__godsEyeView.styleManager.initialRestorePromise,
+    );
+    await page.evaluate(() =>
+      window.__godsEyeView.ui?.setDetection({ enabled: false }),
+    );
+    console.log('Checking Google 3D with OpenFreeMap roads...');
+    await checkStreetSurface('traffic-street-ofm');
+    assert.equal(
+      result['traffic-street-ofm'].stats.roadSource,
+      'OpenStreetMap tiles',
+    );
+    await page.close();
+    page = keyedPage;
+  }
   console.log('Checking Camp Mabry...');
   const before = await page.evaluate(
     () =>
@@ -217,7 +397,7 @@ try {
         .get('military-installations')
         .module.getStats().lastUpdate,
   );
-  await fly(30.314, -97.763, 2000, 25, -80);
+  await fly(30.3125, -97.765, 3500, 25, -80);
   await page.waitForFunction(
     (prior) => {
       const s = window.__godsEyeView.dataManager.layers
@@ -243,9 +423,10 @@ try {
       outlines = 0;
     for (let i = 0; i < viewer.dataSources.length; i++)
       for (const entity of viewer.dataSources.get(i).entities.values) {
-        if (!ids.has(entity.id) || !entity.show) continue;
+        if (!ids.has(entity.installationId || entity.id) || !entity.show)
+          continue;
         if (entity.billboard || entity.point) markers++;
-        if (entity.polygon || entity.polyline) outlines++;
+        if (entity.polyline) outlines++;
       }
     return {
       markers,
@@ -262,11 +443,52 @@ try {
   await shot('camp-mabry');
   await fly(30.314, -97.763, 650, 125, -45);
   await shot('camp-mabry-close');
+  console.log('Checking Fort Cavazos...');
+  const priorFort = await page.evaluate(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('military-installations')
+        .module.getStats().lastUpdate,
+  );
+  await fly(31.135, -97.78, 30000, 0, -90);
+  await settleTiles();
+  await page.waitForFunction(
+    (prior) => {
+      const s = window.__godsEyeView.dataManager.layers
+        .get('military-installations')
+        .module.getStats();
+      return !s.loading && !s.error && s.count > 0 && s.lastUpdate !== prior;
+    },
+    { timeout: 120_000, polling: 500 },
+    priorFort,
+  );
+  result.fortCavazos = await page.evaluate(() => {
+    const { viewer, dataManager } = window.__godsEyeView;
+    let markers = 0,
+      outlines = 0;
+    for (let i = 0; i < viewer.dataSources.length; i++)
+      for (const e of viewer.dataSources.get(i).entities.values) {
+        if (!e.show || !String(e.id).startsWith('ofm:installation:')) continue;
+        if (e.point || e.billboard) markers++;
+        if (e.polyline) outlines++;
+      }
+    return {
+      markers,
+      outlines,
+      stats: dataManager.layers.get('military-installations').module.getStats(),
+    };
+  });
+  await shot('fort-cavazos');
+  assert.ok(
+    result.fortCavazos.markers > 0 && result.fortCavazos.markers <= 12,
+    `Fort Cavazos has 1–12 installation markers (got ${result.fortCavazos.markers})`,
+  );
   assert.deepEqual(
     result.forbiddenRequests,
     [],
     'zero Overpass/Nominatim browser requests',
   );
+  assert.deepEqual(result.errors, [], 'no browser JavaScript errors');
   result.passed = true;
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {

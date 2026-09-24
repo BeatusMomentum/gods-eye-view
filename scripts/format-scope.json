@@ -839,5 +839,8 @@
   "scripts/qa-recent-imagery.mjs",
   "scripts/qa-overpass-offload.mjs",
   "src/overpassOffload.test.mjs",
-  "src/sources/openFreeMap.test.mjs"
+  "src/sources/openFreeMap.test.mjs",
+  "src/sources/vectorTiles.test.mjs",
+  "src/sources/militaryTileGeometry.test.mjs",
+  "src/layers/traffic/surface.test.mjs"
 ]

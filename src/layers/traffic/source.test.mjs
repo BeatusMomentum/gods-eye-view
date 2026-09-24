@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { createTrafficSource } from './source.js';
+import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
+import { decodeFlowTile } from './flowDecode.js';
+import { clipTileLine } from '../../sources/openFreeMap.js';
+import { trafficDetailBounds, createTrafficSource } from './source.js';
 import { clampBoundsAroundCenter } from '../../data/trafficBounds.js';
 const bounds = { south: 30.267, west: -97.744, north: 30.268, east: -97.743 };
 const fixture = readFileSync(
@@ -146,7 +149,27 @@ test('live roads come directly from TomTom and never ask for OpenStreetMap geome
       (r) => r.directFlow && r.oneway === 1 && typeof r.flow.level === 'number',
     ),
   );
-  assert.ok(data.roads.some((r) => r.flow.closure));
+  const expected = decodeFlowTile(fixture, 12, 935, 1686).flatMap((r) =>
+    clipTileLine(r.coords, bounds).map((coordinates) => ({
+      ...r,
+      coordinates,
+    })),
+  );
+  assert.deepEqual(
+    data.roads.map((r) => r.flow.closure),
+    expected.map((r) => r.closure),
+  );
+  assert.ok(
+    data.roads.every((r) =>
+      r.coordinates.every(
+        ([lon, lat]) =>
+          lon >= bounds.west &&
+          lon <= bounds.east &&
+          lat >= bounds.south &&
+          lat <= bounds.north,
+      ),
+    ),
+  );
   assert.ok(calls.every((url) => url.startsWith('/api/tomtom/flow/')));
 });
 
@@ -191,7 +214,7 @@ test('traffic status is session-cached after settlement, but cancelled discovery
   assert.equal(calls, 3);
 });
 
-test('keyless tile roads read the globe height cache without per-fragment offscreen 3D picks', async () => {
+test('road parsing defers surface reads to the cancellable preparation pass', async () => {
   const { createModel } = await import('./model.js');
   let lookups = 0;
   const model = createModel({
@@ -230,7 +253,7 @@ test('keyless tile roads read the globe height cache without per-fragment offscr
   });
   assert.equal(roads.length, 1);
   assert.equal(roads[0].waypoints.length, 2);
-  assert.equal(lookups, 1);
+  assert.equal(lookups, 0);
 });
 
 test('parsed road cache evicts old views by byte budget and never retains partial/live snapshots', async () => {
@@ -257,4 +280,106 @@ test('parsed road cache evicts old views by byte budget and never retains partia
   assert.equal(entries.size, 0);
   cacheRoadSnapshot(entries, 'oversized', entry(), { maxBytes: 1 });
   assert.equal(entries.size, 0);
+});
+
+for (const lat of [51.5, 60])
+  test(`z14 detail at ${lat} stays centered within the sixteen-tile cap`, async () => {
+    const box = {
+      south: lat - 0.025,
+      north: lat + 0.025,
+      west: -0.155,
+      east: -0.105,
+    };
+    assert.ok(tilesForBounds(box, 14).length > 16);
+    const detail = trafficDetailBounds(box);
+    assert.ok(tilesForBounds(detail, 14).length <= 16);
+    assert.ok(Math.abs((detail.south + detail.north) / 2 - lat) < 1e-10);
+    const source = createTrafficSource({
+      mapTiles: { fetchBounds: async () => ({ tiles: [], partial: false }) },
+    });
+    const data = await (await source.requestRoads(box)).json();
+    assert.equal(data.detailLimited, true);
+    assert.deepEqual(data.detailBounds, detail);
+  });
+test('TomTom buffers are clipped before caching and preserve direction and flow attributes', async () => {
+  const core = tileToBBox(12, 935, 1686);
+  const source = createTrafficSource({
+    fetchImpl: async () => new Response(fixture),
+  });
+  const result = await source.fetchFlowForBounds({
+    ...core,
+    east: core.east - 1e-9,
+    south: core.south + 1e-9,
+  });
+  const decoded = decodeFlowTile(fixture, 12, 935, 1686);
+  assert.ok(
+    decoded.some((r) =>
+      r.coords.some(
+        ([x, y]) =>
+          x < core.west || x > core.east || y < core.south || y > core.north,
+      ),
+    ),
+  );
+  assert.ok(
+    result.every((r) =>
+      r.coords.every(
+        ([x, y]) =>
+          x >= core.west - 1e-10 &&
+          x <= core.east + 1e-10 &&
+          y >= core.south - 1e-10 &&
+          y <= core.north + 1e-10,
+      ),
+    ),
+  );
+  assert.ok(result.some((r) => r.closure));
+});
+
+test('a failed detail pass keeps major roads and exposes separate degraded status', async () => {
+  const { createIngestion } = await import('./ingestion.js');
+  const state = {
+    _loadGeneration: 0,
+    _tileCache: new Map(),
+    _enabled: true,
+    _parseRoads: (data) => data.roads,
+  };
+  let paints = 0;
+  const ingestion = createIngestion({
+    state,
+    services: {},
+    parts: {
+      viewport: {
+        clampBounds: (b) => b,
+        getBoundsCenter: (b) => ({
+          lat: (b.north + b.south) / 2,
+          lon: (b.east + b.west) / 2,
+        }),
+      },
+      flow: {
+        ensureFlowStatus: async () => {},
+        applyFlowThenRender: async () => {
+          paints++;
+          return true;
+        },
+      },
+    },
+    source: {
+      requestRoads: async (_, opts) => {
+        if (!opts.majorOnly) throw new Error('tile request failed');
+        return {
+          ok: true,
+          json: async () => ({
+            roads: [],
+            roadSource: 'OpenStreetMap tiles',
+            partial: false,
+          }),
+        };
+      },
+    },
+  });
+  await ingestion.loadRoadsForBounds(bounds, 350);
+  assert.equal(paints, 1);
+  assert.equal(state._roadError, null);
+  assert.equal(state._detailError, 'Detailed roads unavailable');
+  assert.equal(state._roadPartial, true);
+  assert.equal(state._fetching, false);
 });

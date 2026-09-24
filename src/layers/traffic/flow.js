@@ -1,3 +1,4 @@
+import { prepareRoadSurfaces } from './surface.js';
 import { matchFlowToRoads } from '../../data/flowMatch.js';
 import { TRAFFIC_TIMING_ENABLED, FLOW_RENDER_RACE_MS } from './policy.js';
 
@@ -205,6 +206,14 @@ export function createFlow({ state: layerState, services, parts, source }) {
         },
       );
     }
+    if (generation !== layerState._loadGeneration) return false;
+    await prepareRoadSurfaces(
+      roads,
+      layerState._viewer.scene,
+      services.ground,
+      [layerState._pointCollection],
+      layerState._activeFetchAbort?.signal,
+    );
     if (generation !== layerState._loadGeneration) return false;
     parts.rendering.renderRoadsForAltitude(roads, altitude, label, trace);
     if (outcome === 'timeout') {
