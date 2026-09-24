@@ -1,5 +1,12 @@
 # Changelog
 
+- Public Overpass instances are no longer used by default. Street Traffic draws
+  roads from TomTom flow tiles when a TomTom key is set, otherwise from
+  OpenFreeMap vector tiles; mapped military areas come from OpenFreeMap and
+  ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
+  without a replacement say they are unavailable. `OVERPASS_UPSTREAMS` sets an
+  Overpass instance you run or pay for. The cockpit regional brief resolves
+  regions from bundled Natural Earth data instead of Nominatim.
 - Transit and Directions rows repaint as soon as their data lands again:
   `refreshLayerStats()` now lives on the layer lifecycle, not only on the
   compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private
@@ -32,18 +39,6 @@
   `DATA_SOURCES.md`. The swipe is now shared with the Nepal scene
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
-
-## Unreleased — vector tile rendering fixes
-
-- Concentrate TomTom traffic in the look-at viewport, remove buffered tile
-  duplicates and prepare per-vertex surface heights for TomTom/OpenFreeMap
-  roads. Keep the existing TomTom zoom, tile cap and daily budget.
-- Merge military-area tile fragments into stable installation markers and
-  drape footprints over terrain/Google 3D without tile-edge outlines.
-- Bound high-latitude detail coverage and report detail failures separately;
-  retry transient TileJSON failures and cancel every unsuccessful body read.
-- Extend keyed QA with street-level mesh checks for both road sources,
-  Camp Mabry/Fort Cavazos captures and visible-tileset readiness.
 
 ## Unreleased — local receiver feeds
 
@@ -463,7 +458,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
-- Replace default public Overpass queries with TomTom flow roads or OpenFreeMap road/military tiles and an hourly OpenStreetMap ALPR extract for the US and Canada. Optional `OVERPASS_UPSTREAMS` replaces the empty default chain; cached outlines remain dated and missing capability stops retries. Regional briefing now resolves physical regions offline with Natural Earth; Nominatim remains last-resort forward search.
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
