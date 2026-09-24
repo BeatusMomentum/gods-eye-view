@@ -10,6 +10,19 @@ export const RAINVIEWER_BOUNDS = Object.freeze({
   north: MERCATOR_LATITUDE,
 });
 
+const wait = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+
 /** Clamp a non-wrapping geographic window to the Mercator domain. */
 export function mercatorBbox(bbox = RAINVIEWER_BOUNDS) {
   const box = { ...bbox };
@@ -92,6 +105,7 @@ export async function composeMercatorImage({
   signal = new AbortController().signal,
   maxTiles = 24,
   concurrency = 6,
+  sleep = wait,
 }) {
   signal.throwIfAborted();
   if (
@@ -131,7 +145,21 @@ export async function composeMercatorImage({
           .replace('{z}', z)
           .replace('{x}', x)
           .replace('{y}', y);
-        const response = await fetchImpl(url, { signal });
+        let response = await fetchImpl(url, { signal });
+        // The proxy meters RainViewer; wait out a 429 rather than baking a hole
+        // into a frame that is then cached.
+        for (let retry = 0; response.status === 429 && retry < 3; retry++) {
+          await response.body?.cancel();
+          const seconds = Number(response.headers.get('retry-after'));
+          await sleep(
+            Math.min(
+              15,
+              Number.isFinite(seconds) && seconds > 0 ? seconds : 2,
+            ) * 1000,
+            signal,
+          );
+          response = await fetchImpl(url, { signal });
+        }
         if (!response.ok) throw new Error('Weather tile unavailable');
         const bytes = await readResponseBytesCapped(response, 1024 * 1024);
         signal.throwIfAborted();

@@ -150,6 +150,7 @@ test('mosaic limits concurrency, tolerates partial failure, releases decoded ima
     composeMercatorImage({
       ...options,
       fetchImpl: async () => new Response('', { status: 429 }),
+      sleep: async () => {},
     }),
     /tiles unavailable/,
   );
@@ -217,4 +218,27 @@ test('whole and detail RainViewer images use composition and strict source metad
   assert.throws(() =>
     validateWeatherSnapshot({ ...snapshot, product: 'radar' }, 'radar'),
   );
+});
+
+test('a metered tile waits out Retry-After instead of leaving a hole', async () => {
+  const seen = new Map();
+  const waits = [];
+  const result = await composeMercatorImage({
+    ...options,
+    bbox: { west: -180, south: -85.0511, east: 180, north: 85.0511 },
+    size: { width: 512, height: 256 },
+    maxTiles: 1,
+    fetchImpl: async (url) => {
+      const count = (seen.get(url) ?? 0) + 1;
+      seen.set(url, count);
+      return count === 1
+        ? new Response('', { status: 429, headers: { 'Retry-After': '3' } })
+        : new Response(new Uint8Array([1]));
+    },
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
+  });
+  assert.deepEqual(waits, [3000]);
+  assert.equal(result.texture.draws[0][0].draws.length, 1);
 });
