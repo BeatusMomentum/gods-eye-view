@@ -81,9 +81,6 @@ export function createLifecycle({
       layerState._lastAnimTime = 0;
       layerState._pointCollection.show = true;
 
-      // One status check per session decides sim vs live-TomTom mode.
-      parts.flow.ensureFlowStatus();
-
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,
       );
@@ -117,7 +114,12 @@ export function createLifecycle({
       // failed first fetch left the viewport unloaded while parked.
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = setInterval(() => {
-        if (!layerState._enabled || layerState._lastUpdate) {
+        if (
+          !layerState._enabled ||
+          layerState._lastUpdate ||
+          layerState._roadRetryStopped ||
+          layerState._retryAttempts >= 3
+        ) {
           clearInterval(layerState._enableKickTimer);
           layerState._enableKickTimer = null;
           return;

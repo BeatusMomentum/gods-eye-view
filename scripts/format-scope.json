@@ -836,5 +836,8 @@
   "src/ui/imageryBoxTool.test.mjs",
   "src/ui/recentImagery.test.mjs",
   "src/layers/recentImagery/testDoubles.mjs",
-  "scripts/qa-recent-imagery.mjs"
+  "scripts/qa-recent-imagery.mjs",
+  "scripts/qa-overpass-offload.mjs",
+  "src/overpassOffload.test.mjs",
+  "src/sources/openFreeMap.test.mjs"
 ]

@@ -290,7 +290,11 @@ export function createTiming({ state: layerState, services, parts, source }) {
         /* TRACE_ONLY_BEGIN */
         const _trafficTimingSampleStart = performance.now();
         /* TRACE_ONLY_END */
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
+        // A visible globe already owns cached terrain heights. A 3D pick here
+        // would render an offscreen scene once for every vector-tile fragment.
+        const sampled = layerState._viewer.scene.globe?.show
+          ? layerState._viewer.scene.globe.getHeight?.(carto)
+          : layerState._viewer.scene.sampleHeight(carto);
         /* TRACE_ONLY_BEGIN */
         _trafficTimingSampleHeightMs +=
           performance.now() - _trafficTimingSampleStart;
@@ -316,7 +320,17 @@ export function createTiming({ state: layerState, services, parts, source }) {
         performance.now() - _trafficTimingMaterializeStart;
       /* TRACE_ONLY_END */
 
-      roads.push({ coords, type, oneway, waypoints, segmentDist });
+      roads.push({
+        coords,
+        type,
+        oneway,
+        waypoints,
+        segmentDist,
+        flow: road.flow || null,
+        directFlow: road.directFlow === true,
+        trafficRoadCoverage: road.trafficRoadCoverage ?? null,
+        leftHandTraffic: road.leftHandTraffic === true,
+      });
     }
 
     /* TRACE_ONLY_BEGIN */

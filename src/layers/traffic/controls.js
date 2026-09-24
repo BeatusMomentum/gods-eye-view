@@ -14,7 +14,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: 'OpenStreetMap',
+    source: 'OpenStreetMap tiles / TomTom',
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,
@@ -180,7 +180,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         // in one had better be the honest one. This is also where LIVE vs
         // SIMULATED mode is surfaced, and it must never imply a live feed the
         // layer does not have.
-        loadingLabel: feed.loadingLabel,
+        roadSource: layerState._roadSource,
+        source: layerState._roadSource,
+        loadingLabel: layerState._roadError
+          ? `UNAVAILABLE · ${layerState._roadSource} · Roads unavailable`
+          : `${layerState._roadSource === 'TomTom' && !loading && !feed.error ? 'LIVE' : feed.loadingLabel} · Roads: ${layerState._roadSource}${layerState._roadPartial ? ' · Partial coverage' : ''}`,
       };
     },
   };

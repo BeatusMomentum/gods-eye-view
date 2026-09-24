@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../../sources/capability.js';
 import * as Cesium from 'cesium';
 import {
   LAYER_ID,
@@ -186,6 +187,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       )
         return;
       const { records, stale, saturated } = validateAlprSnapshot(snapshot);
+      state.noCoverage = snapshot.noCoverage === true;
       state.records = records;
       state.recordById = new Map(records.map((r) => [r.id, r]));
       state.lastUpdate = Date.now();
@@ -219,7 +221,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         'unavailable',
         error?.message || 'Camera source temporarily unavailable',
       );
-      scheduleUnavailableRetry();
+      if (!isUnavailableCapability(error)) scheduleUnavailableRetry();
     } finally {
       if (state.abort === requestAbort) {
         state.abort = null;
@@ -282,6 +284,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       return loadCameras();
     },
     destroy(viewer = state.viewer) {
+      source.destroy?.();
       this.disable();
       destroyOverlay();
       state.moveEndRemove?.();
@@ -358,9 +361,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             : [
                 state.stale ? 'Showing cached locations' : '',
                 state.saturated ? 'Coverage limited — zoom in' : '',
-                state.status === 'empty'
-                  ? 'No mapped cameras returned — coverage is incomplete'
-                  : '',
+                state.status === 'empty' ? 'No ALPR data for this area' : '',
               ]
                 .filter(Boolean)
                 .join(' · '),

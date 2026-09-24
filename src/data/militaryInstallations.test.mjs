@@ -798,7 +798,7 @@ test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean',
 
 test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
-    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*parts\.viewport\.scheduleUnavailableRetry\(\);/,
+    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*if \(!isUnavailableCapability\(error\)\)\s*parts\.viewport\.scheduleUnavailableRetry\(error\?\.retryAfterMs\);/,
     'a failed load schedules the retry immediately after reporting unavailable');
   assert.match(installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,

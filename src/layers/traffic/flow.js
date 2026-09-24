@@ -39,11 +39,16 @@ export function createFlow({ state: layerState, services, parts, source }) {
    * @returns {Promise<void>} Resolves when `_liveMode` is settled.
    */
 
-  function ensureFlowStatus() {
+  function ensureFlowStatus(signal) {
+    if (layerState._flowStatusSignal?.aborted)
+      layerState._flowStatusPromise = null;
     if (!layerState._flowStatusPromise) {
+      layerState._flowStatusSignal = signal;
       layerState._flowStatusPromise = source
-        .getStatus()
+        .getStatus({ signal })
         .then((status) => {
+          if (layerState._flowStatusSignal === signal)
+            layerState._flowStatusSignal = null;
           layerState._liveMode = Boolean(status?.hasKey);
           layerState._flowStatusUnavailable = false;
           if (layerState._liveMode) {
@@ -52,6 +57,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
           }
         })
         .catch((e) => {
+          if (e?.name === 'AbortError') throw e;
+          if (layerState._flowStatusSignal === signal)
+            layerState._flowStatusSignal = null;
           // Simulating because we could not ask, which is NOT the same as
           // "server says no key" — getStats() distinguishes the two.
           layerState._liveMode = false;
@@ -93,6 +101,11 @@ export function createFlow({ state: layerState, services, parts, source }) {
       if (!layerState._liveMode || !layerState._enabled) return;
       if (generation !== layerState._loadGeneration) return;
       if (!Array.isArray(roads) || roads.length === 0) return;
+      if (roads.every((road) => road.directFlow)) {
+        layerState._flowCoveragePct = 100;
+        layerState._flowError = null;
+        return;
+      }
       try {
         // Cached paths reach here without a live controller; the fetch paths
         // reuse theirs so one cancel covers both roads and flow.

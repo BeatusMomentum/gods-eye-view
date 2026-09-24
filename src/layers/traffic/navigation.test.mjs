@@ -216,3 +216,22 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   assert.equal(calls, 2);
   assert.equal(layer.getStats().error, null);
 });
+
+test('not-configured roads stop both parked retries and the enable-time kick', async (t) => {
+  let requests = 0;
+  const h = setup(t, async () => {
+    requests++;
+    return {
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      json: async () => ({ code: 'OVERPASS_NOT_CONFIGURED', retryable: false }),
+    };
+  });
+  h.layer.enable(h.viewer);
+  await h.tick(400);
+  await h.tick(60_000);
+  assert.equal(requests, 1);
+  assert.equal(h.layer.getStats().loading, false);
+  assert.match(h.layer.getStats().loadingLabel, /UNAVAILABLE/);
+});

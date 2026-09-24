@@ -440,6 +440,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Replace default public Overpass queries with TomTom flow roads or OpenFreeMap road/military tiles and an hourly OpenStreetMap ALPR extract for the US and Canada. Optional `OVERPASS_UPSTREAMS` replaces the empty default chain; cached outlines remain dated and missing capability stops retries. Regional briefing now resolves physical regions offline with Natural Earth; Nominatim remains last-resort forward search.
+
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.

@@ -1,9 +1,35 @@
 import {
+  isUnavailableCapability,
+  sourceResponseError,
+} from '../../sources/capability.js';
+import {
   TRAFFIC_TIMING_ENABLED,
-  OVERPASS_URL,
   TILE_CACHE_MAX_ENTRIES,
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
+
+/** Retain complete parsed snapshots under both an LRU entry cap and a byte budget. */
+export function cacheRoadSnapshot(
+  entries,
+  key,
+  entry,
+  { retain = true, maxBytes = 24 * 1024 * 1024 } = {},
+) {
+  entries.delete(key);
+  if (!retain) return;
+  entry.cacheBytes = new TextEncoder().encode(
+    JSON.stringify([entry.major, entry.full]),
+  ).byteLength;
+  if (entry.cacheBytes > maxBytes) return;
+  entries.set(key, entry);
+  let bytes = 0;
+  for (const value of entries.values()) bytes += value.cacheBytes || 0;
+  while (entries.size > TILE_CACHE_MAX_ENTRIES || bytes > maxBytes) {
+    const oldest = entries.keys().next().value;
+    bytes -= entries.get(oldest).cacheBytes || 0;
+    entries.delete(oldest);
+  }
+}
 
 export function createIngestion({
   state: layerState,
@@ -11,13 +37,10 @@ export function createIngestion({
   parts,
   source,
 }) {
-  const { fetchFlowForBounds } = source;
-
   /**
-   * Fetch road geometries from the Overpass API via the local proxy.
+   * Fetch road geometries from the selected vector tile source.
    *
-   * Sends a POST with the query as form-encoded `data`. Supports
-   * AbortController signals so in-flight requests can be cancelled
+   * Supports AbortController signals so in-flight requests can be cancelled
    * when the camera moves before the response arrives.
    *
    * @param {number} south - Southern latitude bound (degrees).
@@ -26,10 +49,10 @@ export function createIngestion({
    * @param {number} east  - Eastern longitude bound (degrees).
    * @param {Object}  [opts]
    * @param {boolean} [opts.majorOnly=false]  - Restrict to major highway classes.
-   * @param {number}  [opts.timeoutSec=25]    - Server-side Overpass timeout.
+   * @param {number}  [opts.timeoutSec=25]    - Compatibility deadline for injected sources.
    * @param {AbortSignal} [opts.signal]       - Abort signal for cancellation.
    * @param {Object|null} [trace=null] - Development-only correlated load trace.
-   * @returns {Promise<Object>} Parsed JSON response from Overpass.
+   * @returns {Promise<Object>} Parsed JSON response from vector tiles.
    * @throws {Error} If the HTTP response status is not OK.
    */
 
@@ -63,11 +86,15 @@ export function createIngestion({
     }
     const response = await source.requestRoads(
       { south, west, north, east },
-      { majorOnly, timeoutSec, signal },
+      { majorOnly, timeoutSec, signal, live: layerState._liveMode },
     );
 
     if (!response.ok) {
-      throw new Error(`Overpass API returned ${response.status}`);
+      throw sourceResponseError(
+        await response.json().catch(() => ({})),
+        response,
+        'Road data temporarily unavailable',
+      );
     }
 
     if (!state) {
@@ -75,6 +102,10 @@ export function createIngestion({
       signal?.throwIfAborted();
       if (!Array.isArray(data?.roads))
         throw new Error('Malformed road snapshot');
+      layerState._roadSource =
+        data.roadSource ||
+        (layerState._liveMode ? 'TomTom' : 'OpenStreetMap tiles');
+      layerState._roadPartial = Boolean(data.partial);
       return data;
     }
 
@@ -119,10 +150,14 @@ export function createIngestion({
         },
       );
     }
+    layerState._roadSource =
+      data.roadSource ||
+      (layerState._liveMode ? 'TomTom' : 'OpenStreetMap tiles');
+    layerState._roadPartial = Boolean(data.partial);
     return data;
   }
 
-  /** Abort any in-flight Overpass fetch and clear the controller reference. */
+  /** Abort any in-flight road fetch and clear the controller reference. */
 
   function cancelActiveFetch() {
     if (layerState._activeFetchAbort) {
@@ -139,7 +174,7 @@ export function createIngestion({
    *  1. Check the tile cache (keyed by clamped bounding-box coordinates).
    *     - If a full road set is cached, render immediately and return.
    *     - If only major roads are cached, render those first.
-   *  2. Fetch major roads from Overpass (fast, small payload). Render.
+   *  2. Fetch major roads from vector tiles (fast, small payload). Render.
    *  3. If altitude is low enough (< FAST_FETCH_ALTITUDE), fetch the full
    *     road graph (includes tertiary/residential). Render again to upgrade.
    *
@@ -170,26 +205,13 @@ export function createIngestion({
     if (cacheKey !== layerState._retryBoundsKey) {
       layerState._retryBoundsKey = cacheKey;
       layerState._retryDelayMs = 1500;
+      layerState._retryAttempts = 0;
+      layerState._roadRetryStopped = false;
     }
     layerState._roadError = null;
 
-    // Live mode: warm the flow-tile cache CONCURRENTLY with the Overpass road
-    // fetch — sequential fetches doubled first-paint latency (field-test
-    // round 1). Failures are irrelevant; applyFlowToRoads settles the truth.
-    parts.flow.ensureFlowStatus().then(() => {
-      if (
-        layerState._liveMode &&
-        layerState._enabled &&
-        generation === layerState._loadGeneration
-      ) {
-        fetchFlowForBounds(clamped, { signal: requestSignal }).catch(() => {
-          /* warm-up only */
-        });
-      }
-    });
-
     layerState._fetching = true;
-    // Only COMMIT these on success. Committing up-front means a failed Overpass
+    // Only COMMIT these on success. Committing up-front means a failed road
     // fetch (rate-limited / feed down) still trips the overlap gate in
     // onCameraChanged, so a stationary user never retries (H3/H5). Stage the
     // prospective values and roll back if nothing rendered.
@@ -199,8 +221,18 @@ export function createIngestion({
     layerState._lastViewCenter = parts.viewport.getBoundsCenter(clamped);
     let renderedSomething = false;
 
+    let retryable = true;
     try {
+      await parts.flow.ensureFlowStatus(requestSignal);
+      requestSignal.throwIfAborted();
+      layerState._roadSource = layerState._liveMode
+        ? 'TomTom'
+        : 'OpenStreetMap tiles';
       let cache = layerState._tileCache.get(cacheKey);
+      if (cache) {
+        layerState._tileCache.delete(cacheKey);
+        layerState._tileCache.set(cacheKey, cache);
+      }
       if (!cache) {
         // LRU eviction: drop the oldest entry when cache exceeds the cap
         if (layerState._tileCache.size >= TILE_CACHE_MAX_ENTRIES) {
@@ -215,7 +247,8 @@ export function createIngestion({
       // Flow is (re)applied even on cache hits: roads cache for the session,
       // but congestion data has a 120s shelf life. The race renders within
       // FLOW_RENDER_RACE_MS either way; late flow recolors in place.
-      if (cache.full) {
+      if (cache.full && !layerState._liveMode) {
+        layerState._roadPartial = false;
         renderedSomething = await parts.flow.applyFlowThenRender(
           cache.full,
           clamped,
@@ -228,7 +261,8 @@ export function createIngestion({
       }
 
       // Intermediate path: render cached major roads while fetching the rest
-      if (cache.major) {
+      if (cache.major && !layerState._liveMode) {
+        layerState._roadPartial = false;
         if (
           !(await parts.flow.applyFlowThenRender(
             cache.major,
@@ -259,6 +293,9 @@ export function createIngestion({
         // Discard stale response if a newer load was triggered while waiting
         if (generation !== layerState._loadGeneration) return;
         cache.major = layerState._parseRoads(majorData, trace);
+        cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
+          retain: !layerState._roadPartial && !layerState._liveMode,
+        });
         if (
           !(await parts.flow.applyFlowThenRender(
             cache.major,
@@ -274,7 +311,7 @@ export function createIngestion({
       }
 
       // At higher altitude, major roads provide sufficient motion density
-      if (altitude > FAST_FETCH_ALTITUDE) return;
+      if (layerState._liveMode || altitude > FAST_FETCH_ALTITUDE) return;
 
       // Detailed pass: fetch the full road graph (tertiary, residential, etc.)
       console.log(`[Data:Traffic] Full fetch local roads [${cacheKey}]`);
@@ -293,6 +330,9 @@ export function createIngestion({
       if (generation !== layerState._loadGeneration) return;
 
       cache.full = layerState._parseRoads(fullData, trace);
+      cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
+        retain: !layerState._roadPartial,
+      });
       if (
         !(await parts.flow.applyFlowThenRender(
           cache.full,
@@ -307,6 +347,8 @@ export function createIngestion({
       renderedSomething = true;
     } catch (e) {
       if (e?.name === 'AbortError') return;
+      retryable = !isUnavailableCapability(e);
+      layerState._roadRetryStopped = !retryable;
       if (generation === layerState._loadGeneration && !renderedSomething)
         layerState._roadError = 'Road data temporarily unavailable';
       console.warn('[Data:Traffic] Fetch error:', e);
@@ -314,13 +356,18 @@ export function createIngestion({
       if (generation === layerState._loadGeneration) {
         layerState._fetching = false;
         // Roll back the bounds commit if this load rendered nothing (e.g. the
-        // Overpass fetch failed). Leaving them committed would make the overlap
+        // road fetch failed). Leaving them committed would make the overlap
         // gate skip the retry while the user sits still. Guarded on generation so
         // a superseding load's commit is not clobbered.
         if (!renderedSomething) {
           layerState._lastBounds = prevBounds;
           layerState._lastViewCenter = prevViewCenter;
-          if (layerState._enabled) {
+          if (
+            layerState._enabled &&
+            retryable &&
+            layerState._retryAttempts < 3
+          ) {
+            layerState._retryAttempts += 1;
             layerState._retryTimer = setTimeout(() => {
               layerState._retryTimer = null;
               parts.viewport.onCameraChanged();

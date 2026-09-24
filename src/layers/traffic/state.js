@@ -212,6 +212,7 @@ export function createState({ services }) {
   /** @type {Promise<void>|null} Session-cached status check (one fetch per session) */
 
   layerState._flowStatusPromise = null;
+  layerState._flowStatusSignal = null;
 
   /** @type {ReturnType<typeof setInterval>|null} Enable-time retry until the first load commits. */
 
@@ -221,6 +222,10 @@ export function createState({ services }) {
   layerState._retryDelayMs = 1500;
   layerState._retryBoundsKey = null;
   layerState._roadError = null;
+  layerState._roadSource = 'OpenStreetMap tiles';
+  layerState._roadPartial = false;
+  layerState._roadRetryStopped = false;
+  layerState._retryAttempts = 0;
 
   /** @type {number} 0–100 int — matched roads / roads with any flow candidates */
 

@@ -1,3 +1,9 @@
+import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import { tilesForBounds } from '../../data/tomtomTiles.js';
+import {
+  isUnavailableCapability,
+  sourceResponseError,
+} from '../../sources/capability.js';
 import { normalizeMilitaryInstallations } from '../../data/militaryInstallationData.js';
 
 /** Preserve legacy cache admission even when the explicit saturation flag is absent. */
@@ -11,8 +17,32 @@ export function installationResponseSaturated(payload) {
 /** Read mapped installations and explicit nearby-place searches through fixed endpoints. */
 export function createInstallationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  mapTiles = createOpenFreeMapSource({ fetchImpl }),
 } = {}) {
+  let overpassUnavailable = false;
+  async function getTileSites(box, signal) {
+    let zoom = 12;
+    while (zoom > 6 && tilesForBounds(box, zoom, { maxTiles: 17 }).length > 16)
+      zoom -= 1;
+    const result = await mapTiles.fetchBounds(box, { zoom, signal });
+    const retrievedAt = new Date().toISOString();
+    return {
+      records: result.tiles
+        .flatMap((tile) => tile.military)
+        .map((record) => ({
+          ...record,
+          retrievedAt,
+          sources: record.sources.map((source) => ({ ...source, retrievedAt })),
+        })),
+      status: 'ready',
+      droppedCount: 0,
+      saturated: result.partial,
+      source: 'OpenStreetMap tiles',
+      tileSource: true,
+    };
+  }
   return {
+    destroy: () => mapTiles.clear(),
     async getMappedSites(box, { exact = false, signal } = {}) {
       const { south, west, north, east } = box || {};
       if (
@@ -28,6 +58,7 @@ export function createInstallationSource({
       )
         throw new TypeError('A bounded installation viewport is required');
       signal?.throwIfAborted();
+      if (overpassUnavailable) return getTileSites(box, signal);
       const query = new URLSearchParams(
         Object.entries({ south, west, north, east }).map(([key, value]) => [
           key,
@@ -40,9 +71,17 @@ export function createInstallationSource({
       });
       const body = await response.json();
       signal?.throwIfAborted();
+      if (!response.ok && isUnavailableCapability(body)) {
+        overpassUnavailable = true;
+        return getTileSites(box, signal);
+      }
       if (!response.ok)
         throw Object.assign(
-          new Error(body?.error || `Installation feed HTTP ${response.status}`),
+          sourceResponseError(
+            body,
+            response,
+            'Installation context unavailable',
+          ),
           {
             failureReason: ['rate_limited', 'timeout', 'query_failed'].includes(
               body?.reason,

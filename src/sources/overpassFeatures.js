@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from './capability.js';
 export {
   FEATURE_SOURCE_METHODS,
   requireFeatureSource,
@@ -16,7 +17,7 @@ function validPoint(lat, lon) {
 
 /** Query bounded feature candidates; ranking and rendering belong to callers.
  * Array = definitive response (possibly empty), null = retryable failure,
- * {rateLimited, retryAfterMs} = admission delay.
+ * {rateLimited, retryAfterMs} = admission delay; {unavailable, retryable:false} = no capability.
  */
 export function createOverpassFeatureSource({
   boundarySource,
@@ -24,11 +25,13 @@ export function createOverpassFeatureSource({
 } = {}) {
   if (typeof boundarySource?.query !== 'function')
     throw new TypeError('A boundary query transport is required');
+  let unavailable = null;
   async function query(
     text,
     timeoutMs,
     { signal, focus = false, relationsOnly = false } = {},
   ) {
+    if (unavailable) return unavailable;
     const controller = new AbortController();
     const signals = [lifetime, signal, controller.signal].filter(Boolean);
     const combined = AbortSignal.any(signals);
@@ -37,6 +40,14 @@ export function createOverpassFeatureSource({
       combined.throwIfAborted();
       const elements = await boundarySource.query(text, { signal: combined });
       combined.throwIfAborted();
+      if (isUnavailableCapability(elements)) {
+        unavailable = {
+          unavailable: true,
+          code: elements.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
       return Array.isArray(elements)
         ? normalizeOverpassFeatures(
             relationsOnly
@@ -45,7 +56,15 @@ export function createOverpassFeatureSource({
             { focus },
           )
         : elements;
-    } catch {
+    } catch (error) {
+      if (isUnavailableCapability(error)) {
+        unavailable = {
+          unavailable: true,
+          code: error.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
       return null;
     } finally {
       clearTimeout(timer);

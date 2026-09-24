@@ -55,7 +55,11 @@ export function createModel({ state: layerState, services, parts, source }) {
           firstCoord[0],
           firstCoord[1],
         );
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
+        // A visible globe already owns cached terrain heights. A 3D pick here
+        // would render an offscreen scene once for every vector-tile fragment.
+        const sampled = layerState._viewer.scene.globe?.show
+          ? layerState._viewer.scene.globe.getHeight?.(carto)
+          : layerState._viewer.scene.sampleHeight(carto);
         if (Number.isFinite(sampled)) baseHeight = sampled;
       }
 
@@ -73,7 +77,17 @@ export function createModel({ state: layerState, services, parts, source }) {
         );
       }
 
-      roads.push({ coords, type, oneway, waypoints, segmentDist });
+      roads.push({
+        coords,
+        type,
+        oneway,
+        waypoints,
+        segmentDist,
+        flow: road.flow || null,
+        directFlow: road.directFlow === true,
+        trafficRoadCoverage: road.trafficRoadCoverage ?? null,
+        leftHandTraffic: road.leftHandTraffic === true,
+      });
     }
 
     return roads;

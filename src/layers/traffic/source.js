@@ -1,74 +1,62 @@
-import { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
-export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 import { createFlowTileSource } from './flowSource.js';
-function buildOverpassQuery(
-  south,
-  west,
-  north,
-  east,
-  { majorOnly = false, timeoutSec = 25 } = {},
-) {
-  // Regex matches the OSM `highway` tag value against allowed road types
-  const regex = majorOnly
-    ? '^(motorway|trunk|primary|secondary)$'
-    : '^(motorway|trunk|primary|secondary|tertiary|residential|unclassified)$';
-  return `[out:json][timeout:${timeoutSec}];(way["highway"~"${regex}"](${south},${west},${north},${east}););out geom qt;`;
-}
+import { flowSegmentsToRoads } from './flowDecode.js';
+import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import { validTileBounds } from '../../sources/vectorTiles.js';
+export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 
-/** Supply road responses, flow availability and one decoded flow cache. */
+/** Supply tile-derived road geometry and flow availability without Overpass queries. */
 export function createTrafficSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  mapTiles = createOpenFreeMapSource({ fetchImpl }),
 } = {}) {
   const flow = createFlowTileSource({ fetchImpl });
   return {
     ...flow,
-    async requestRoads(
-      { south, west, north, east },
-      { majorOnly = false, timeoutSec = 25, signal } = {},
-    ) {
+    resetFlowTileCache() {
+      flow.resetFlowTileCache();
+      mapTiles.clear();
+    },
+    async requestRoads(box, { majorOnly = false, signal, live = false } = {}) {
       if (
-        ![south, west, north, east].every(Number.isFinite) ||
-        south < -90 ||
-        north > 90 ||
-        west < -180 ||
-        east > 180 ||
-        north <= south ||
-        east <= west ||
-        north - south > 10 ||
-        east - west > 10 ||
-        !Number.isInteger(timeoutSec) ||
-        timeoutSec < 1 ||
-        timeoutSec > 30
+        !validTileBounds(box) ||
+        box.north - box.south > 10 ||
+        box.east - box.west > 10
       )
-        throw new TypeError('A bounded road viewport and timeout are required');
-      signal?.throwIfAborted();
-      const query = buildOverpassQuery(south, west, north, east, {
-        majorOnly,
-        timeoutSec,
-      });
-      const response = await fetchImpl('/api/overpass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'data=' + encodeURIComponent(query),
-        signal,
-      });
+        throw new TypeError('A bounded road viewport is required');
+      let data;
+      if (live) {
+        const segments = await flow.fetchFlowForBounds(box, { signal });
+        data = {
+          roads: flowSegmentsToRoads(segments),
+          roadSource: 'TomTom',
+          partial: flow.getFlowSessionStats().partial,
+        };
+      } else {
+        const result = await mapTiles.fetchBounds(box, {
+          zoom: majorOnly ? 12 : 14,
+          signal,
+        });
+        data = {
+          roads: result.tiles.flatMap((tile) => tile.roads),
+          roadSource: 'OpenStreetMap tiles',
+          partial: result.partial,
+        };
+      }
       signal?.throwIfAborted();
       return {
-        ok: response.ok,
-        status: response.status,
-        headers: response.headers,
+        ok: true,
+        status: 200,
+        headers: new Headers(),
         async json() {
-          const body = await response.json();
-          signal?.throwIfAborted();
-          if (!Array.isArray(body?.elements))
-            throw new Error('Malformed road snapshot');
-          return { roads: normalizeOverpassRoads(body) };
+          return data;
         },
       };
     },
     async getStatus({ signal } = {}) {
-      signal?.throwIfAborted();
-      const response = await fetchImpl('/api/tomtom/status', { signal });
+      const timeout = AbortSignal.timeout(8000);
+      const response = await fetchImpl('/api/tomtom/status', {
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const status = await response.json();
       signal?.throwIfAborted();

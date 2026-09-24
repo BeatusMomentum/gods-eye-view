@@ -42,6 +42,7 @@ test('a cancelled flow body cannot refill its source cache', async () => {
   const source = createTrafficSource({
     fetchImpl: async () => ({
       ok: true,
+      headers: new Headers(),
       arrayBuffer: async () => {
         calls++;
         if (calls === 1) controller.abort();
@@ -60,55 +61,36 @@ test('a cancelled flow body cannot refill its source cache', async () => {
     'cancelled bytes were not admitted to the decode cache',
   );
 });
-test('road requests have finite bounds and retain the two-pass query', async () => {
+test('road requests validate bounds and select z12/z14 immutable tile passes', async () => {
   const calls = [];
   const source = createTrafficSource({
-    fetchImpl: async (...args) => {
-      calls.push(args);
-      return new Response('{"elements":[]}');
+    mapTiles: {
+      async fetchBounds(box, options) {
+        calls.push({ box, ...options });
+        return { tiles: [{ roads: [] }], partial: false };
+      },
+      clear() {},
     },
   });
   await assert.rejects(
     source.requestRoads({ ...bounds, north: Infinity }),
     /bounded road viewport/,
   );
-  await assert.rejects(
-    source.requestRoads(bounds, { timeoutSec: '25];out;' }),
-    /bounded road viewport/,
-  );
   assert.equal(calls.length, 0);
-  await source.requestRoads(bounds, { majorOnly: true, timeoutSec: 8 });
-  assert.equal(calls[0][0], '/api/overpass');
-  const query = new URLSearchParams(calls[0][1].body).get('data');
-  assert.match(query, /\[timeout:8\]/);
-  assert.doesNotMatch(query, /residential/);
+  await source.requestRoads(bounds, { majorOnly: true });
   await source.requestRoads(bounds);
-  assert.match(
-    new URLSearchParams(calls[1][1].body).get('data'),
-    /residential/,
+  assert.deepEqual(
+    calls.map((c) => c.zoom),
+    [12, 14],
   );
-});
-test('antimeridian clamps produce road bounds accepted on either side', async () => {
-  const calls = [];
-  const source = createTrafficSource({
-    fetchImpl: async (...args) => {
-      calls.push(args);
-      return new Response('{"elements":[]}');
-    },
-  });
   for (const centerLon of [179.99, -179.99]) {
     const clamped = clampBoundsAroundCenter(
-      {
-        south: -0.02,
-        north: 0.02,
-        west: 179.98,
-        east: -179.98,
-      },
+      { south: -0.02, north: 0.02, west: 179.98, east: -179.98 },
       { lat: 0, lon: centerLon },
     );
     await source.requestRoads(clamped);
   }
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4);
 });
 test('malformed availability is an unavailable source rather than a keyless response', async () => {
   const source = createTrafficSource({
@@ -132,59 +114,147 @@ test('traffic construction is inert and parameters belong to each layer', async 
   assert.equal(b.getParams().uncoveredRoads, 'sim');
 });
 
-test('road body parsing retains the source request cancellation signal', async () => {
-  const controller = new AbortController();
+test('road tile replies respect cancellation even when the tile source ignores it', async () => {
+  const abort = new AbortController();
   const source = createTrafficSource({
-    fetchImpl: async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-      json: async () => {
-        controller.abort();
-        return { elements: [] };
+    mapTiles: {
+      async fetchBounds() {
+        abort.abort();
+        return { tiles: [{ roads: [] }], partial: false };
       },
-    }),
+    },
   });
-  const response = await source.requestRoads(bounds, {
-    signal: controller.signal,
+  await assert.rejects(source.requestRoads(bounds, { signal: abort.signal }), {
+    name: 'AbortError',
   });
-  await assert.rejects(response.json(), { name: 'AbortError' });
 });
 
-test('road sources decode direction and coordinates before scene construction', async () => {
-  const geometry = [
-    { lat: 30, lon: -97 },
-    { lat: 30.001, lon: -97.001 },
-  ];
+test('live roads come directly from TomTom and never ask for OpenStreetMap geometry', async () => {
+  const calls = [];
   const source = createTrafficSource({
-    fetchImpl: async () =>
-      Response.json({
-        elements: [
-          { type: 'node', id: 1 },
-          { type: 'way', geometry, tags: { highway: 'primary', oneway: '-1' } },
-          { type: 'way', geometry, tags: { junction: 'roundabout' } },
-          { type: 'way', geometry: [geometry[0]] },
-        ],
-      }),
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return new Response(fixture);
+    },
+    mapTiles: { fetchBounds: () => assert.fail('live mode asked for OSM') },
   });
-  assert.deepEqual(await (await source.requestRoads(bounds)).json(), {
+  const data = await (await source.requestRoads(bounds, { live: true })).json();
+  assert.equal(data.roadSource, 'TomTom');
+  assert.ok(data.roads.length > 0);
+  assert.ok(
+    data.roads.every(
+      (r) => r.directFlow && r.oneway === 1 && typeof r.flow.level === 'number',
+    ),
+  );
+  assert.ok(data.roads.some((r) => r.flow.closure));
+  assert.ok(calls.every((url) => url.startsWith('/api/tomtom/flow/')));
+});
+
+test('traffic status is session-cached after settlement, but cancelled discovery can restart', async () => {
+  const { createFlow } = await import('./flow.js');
+  let calls = 0;
+  const state = {};
+  const flow = createFlow({
+    state,
+    services: { credits: { registerDynamicCredit() {} } },
+    parts: {},
+    source: {
+      async getStatus({ signal }) {
+        calls++;
+        signal?.throwIfAborted();
+        return { hasKey: false };
+      },
+    },
+  });
+  const first = new AbortController();
+  await flow.ensureFlowStatus(first.signal);
+  first.abort();
+  await flow.ensureFlowStatus(new AbortController().signal);
+  assert.equal(calls, 1);
+  const retryState = {};
+  const retryFlow = createFlow({
+    state: retryState,
+    services: { credits: {} },
+    parts: {},
+    source: {
+      async getStatus({ signal }) {
+        calls++;
+        signal.throwIfAborted();
+        return { hasKey: false };
+      },
+    },
+  });
+  await assert.rejects(retryFlow.ensureFlowStatus(first.signal), {
+    name: 'AbortError',
+  });
+  await retryFlow.ensureFlowStatus(new AbortController().signal);
+  assert.equal(calls, 3);
+});
+
+test('keyless tile roads read the globe height cache without per-fragment offscreen 3D picks', async () => {
+  const { createModel } = await import('./model.js');
+  let lookups = 0;
+  const model = createModel({
+    state: {
+      _viewer: {
+        scene: {
+          sampleHeightSupported: true,
+          sampleHeight() {
+            assert.fail('offscreen 3D height probe on keyless globe');
+          },
+          globe: {
+            show: true,
+            getHeight() {
+              lookups++;
+              return 0;
+            },
+          },
+        },
+      },
+    },
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const roads = model.parseRoads({
     roads: [
       {
         coordinates: [
-          [-97, 30],
-          [-97.001, 30.001],
+          [-97.74, 30.27],
+          [-97.741, 30.271],
         ],
-        type: 'primary',
-        oneway: -1,
-      },
-      {
-        coordinates: [
-          [-97, 30],
-          [-97.001, 30.001],
-        ],
-        type: 'unclassified',
-        oneway: 1,
+        type: 'residential',
+        oneway: 0,
       },
     ],
   });
+  assert.equal(roads.length, 1);
+  assert.equal(roads[0].waypoints.length, 2);
+  assert.equal(lookups, 1);
+});
+
+test('parsed road cache evicts old views by byte budget and never retains partial/live snapshots', async () => {
+  const { cacheRoadSnapshot } = await import('./ingestion.js');
+  const entries = new Map();
+  const entry = () => ({
+    major: [
+      {
+        coords: [
+          [1, 2],
+          [3, 4],
+        ],
+      },
+    ],
+    full: null,
+  });
+  const first = entry();
+  cacheRoadSnapshot(entries, 'old', first);
+  cacheRoadSnapshot(entries, 'new', entry(), {
+    maxBytes: first.cacheBytes + 1,
+  });
+  assert.deepEqual([...entries.keys()], ['new']);
+  cacheRoadSnapshot(entries, 'new', entry(), { retain: false });
+  assert.equal(entries.size, 0);
+  cacheRoadSnapshot(entries, 'oversized', entry(), { maxBytes: 1 });
+  assert.equal(entries.size, 0);
 });

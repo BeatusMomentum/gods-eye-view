@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
@@ -73,8 +74,15 @@ export function createApplicationRequestServices({
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: `data=${encodeURIComponent(query)}`,
         });
+        if (isUnavailableCapability(response.data))
+          return {
+            unavailable: true,
+            code: 'OVERPASS_NOT_CONFIGURED',
+            retryable: false,
+          };
         const retry = response.headers?.get?.('Retry-After');
         if (
+          response.status === 406 ||
           response.status === 429 ||
           (response.status === 503 && retry != null)
         )

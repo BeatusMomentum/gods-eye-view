@@ -1,0 +1,289 @@
+import { tilesForBounds } from '../data/tomtomTiles.js';
+import { readResponseBytesCapped, readResponseJsonCapped } from './httpBody.js';
+
+/** Validate a non-dateline geographic viewport before selecting a bounded grid. */
+export function validTileBounds(box) {
+  return (
+    box &&
+    [box.south, box.west, box.north, box.east].every(Number.isFinite) &&
+    box.south >= -90 &&
+    box.north <= 90 &&
+    box.west >= -180 &&
+    box.east <= 180 &&
+    box.north > box.south &&
+    box.east > box.west
+  );
+}
+
+/** A decoded XYZ cache with bounded workers, reads, retained bytes and request lifetimes. */
+export function createVectorTileSource({
+  tileJsonUrl,
+  template,
+  allowedOrigin,
+  decode,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  maxTiles = 16,
+  concurrency = 4,
+  ttlMs = Infinity,
+  maxEntries = 64,
+  maxCacheBytes = 24 * 1024 * 1024,
+  maxResponseBytes = 4 * 1024 * 1024,
+}) {
+  const cache = new Map();
+  const active = new Set();
+  let cacheBytes = 0;
+  let metadata = null;
+  let metadataError = null;
+  let metadataFlight = null;
+  let generation = 0;
+  let fetched = 0;
+  let activeWorkers = 0;
+  const waiters = [];
+
+  async function request(url, parentSignal, read) {
+    const controller = new AbortController();
+    const abort = () => controller.abort(parentSignal?.reason);
+    parentSignal?.throwIfAborted();
+    parentSignal?.addEventListener('abort', abort, { once: true });
+    active.add(controller);
+    const timer = setTimeout(
+      () =>
+        controller.abort(
+          new DOMException('Vector tile request timed out', 'TimeoutError'),
+        ),
+      12_000,
+    );
+    try {
+      const response = await fetchImpl(url, {
+        signal: controller.signal,
+        redirect: 'error',
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error(`Vector tiles unavailable (HTTP ${response.status})`);
+      }
+      const value = await read(response, controller.signal);
+      controller.signal.throwIfAborted();
+      return value;
+    } finally {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener('abort', abort);
+      active.delete(controller);
+    }
+  }
+
+  async function getMetadata(signal) {
+    signal?.throwIfAborted();
+    if (metadata) return metadata;
+    if (metadataError) throw metadataError;
+    if (!metadataFlight) {
+      const flight = {
+        controller: new AbortController(),
+        users: 0,
+        promise: null,
+      };
+      metadataFlight = flight;
+      flight.promise = (
+        template
+          ? Promise.resolve({ tiles: [template] })
+          : request(
+              tileJsonUrl,
+              flight.controller.signal,
+              (res, requestSignal) =>
+                readResponseJsonCapped(res, 256 * 1024, requestSignal),
+            )
+      )
+        .then((value) => {
+          flight.controller.signal.throwIfAborted();
+          const url = value?.tiles?.[0];
+          if (
+            typeof url !== 'string' ||
+            !['{z}', '{x}', '{y}'].every((token) => url.includes(token))
+          )
+            throw new Error('Invalid vector tile metadata');
+          const parsed = new URL(
+            url.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0'),
+            allowedOrigin,
+          );
+          if (
+            parsed.origin !== allowedOrigin ||
+            parsed.username ||
+            parsed.password
+          )
+            throw new Error('Invalid vector tile origin');
+          metadata = { ...value, template: url };
+          return metadata;
+        })
+        .catch((error) => {
+          if (error.name === 'AbortError') throw error;
+          metadataError = Object.assign(
+            new Error('Vector tile metadata unavailable'),
+            { retryable: false },
+          );
+          throw metadataError;
+        })
+        .finally(() => {
+          if (metadataFlight === flight) metadataFlight = null;
+        });
+    }
+    const flight = metadataFlight;
+    flight.users += 1;
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      signal?.addEventListener('abort', abort, { once: true });
+      const cleanup = () => signal?.removeEventListener('abort', abort);
+      flight.promise.then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error) => {
+          cleanup();
+          reject(error);
+        },
+      );
+    }).finally(() => {
+      // Each caller owns its wait; only the last departing caller cancels shared metadata.
+      flight.users -= 1;
+      if (!flight.users && metadataFlight === flight) {
+        flight.controller.abort();
+        metadataFlight = null;
+      }
+    });
+  }
+
+  async function acquire(signal) {
+    signal?.throwIfAborted();
+    if (activeWorkers >= concurrency) {
+      await new Promise((resolve, reject) => {
+        const waiter = {
+          resolve: () => {
+            signal?.removeEventListener('abort', abort);
+            resolve();
+          },
+        };
+        const abort = () => {
+          const i = waiters.indexOf(waiter);
+          if (i >= 0) waiters.splice(i, 1);
+          reject(signal.reason);
+        };
+        signal?.addEventListener('abort', abort, { once: true });
+        waiters.push(waiter);
+      });
+    } else activeWorkers += 1;
+  }
+
+  function release() {
+    const waiter = waiters.shift();
+    if (waiter) waiter.resolve();
+    else activeWorkers -= 1;
+  }
+
+  async function getTile(tile, meta, signal, epoch) {
+    await acquire(signal);
+    try {
+      signal?.throwIfAborted();
+      if (epoch !== generation)
+        throw new DOMException('Source cleared', 'AbortError');
+      const key = `${tile.z}/${tile.x}/${tile.y}`;
+      const hit = cache.get(key);
+      if (hit && Date.now() - hit.at < ttlMs) {
+        cache.delete(key);
+        cache.set(key, hit);
+        return hit.value;
+      }
+      fetched += 1;
+      const url = meta.template
+        .replace('{z}', tile.z)
+        .replace('{x}', tile.x)
+        .replace('{y}', tile.y);
+      const bytes = await request(url, signal, (res) =>
+        readResponseBytesCapped(res, maxResponseBytes),
+      );
+      const value = decode(bytes, tile.z, tile.x, tile.y);
+      signal?.throwIfAborted();
+      // Account for decoded coordinate/property storage, not just compressed input.
+      const size = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+      if (epoch === generation && size <= maxCacheBytes) {
+        if (cache.has(key)) {
+          cacheBytes -= cache.get(key).size;
+          cache.delete(key);
+        }
+        cache.set(key, { at: Date.now(), value, size });
+        cacheBytes += size;
+        while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
+          const oldest = cache.keys().next().value;
+          cacheBytes -= cache.get(oldest).size;
+          cache.delete(oldest);
+        }
+      }
+      return value;
+    } finally {
+      release();
+    }
+  }
+
+  return {
+    getMetadata,
+    async fetchBounds(box, { zoom, signal } = {}) {
+      if (
+        !validTileBounds(box) ||
+        !Number.isInteger(zoom) ||
+        zoom < 0 ||
+        zoom > 14
+      )
+        throw new TypeError('Invalid tile viewport');
+      signal?.throwIfAborted();
+      const epoch = generation;
+      const meta = await getMetadata(signal);
+      const candidates = tilesForBounds(box, zoom, { maxTiles: maxTiles + 1 });
+      const limited = candidates.length > maxTiles;
+      // Refuse over-wide views instead of silently sampling a northwest strip.
+      if (limited)
+        throw Object.assign(new Error('Zoom in for vector tile coverage'), {
+          retryable: false,
+          code: 'TILE_VIEW_TOO_WIDE',
+        });
+      let index = 0;
+      const results = new Array(candidates.length);
+      await Promise.all(
+        Array.from(
+          { length: Math.min(concurrency, candidates.length) },
+          async () => {
+            while (index < candidates.length) {
+              const i = index++;
+              try {
+                results[i] = {
+                  value: await getTile(candidates[i], meta, signal, epoch),
+                };
+              } catch (error) {
+                results[i] = { error };
+              }
+            }
+          },
+        ),
+      );
+      signal?.throwIfAborted();
+      if (epoch !== generation)
+        throw new DOMException('Source cleared', 'AbortError');
+      const good = results.filter((result) => !result.error);
+      if (!good.length && results.length) throw results[0].error;
+      return {
+        tiles: good.map((result) => result.value),
+        partial: good.length !== results.length,
+        limited,
+      };
+    },
+    getStats: () => ({
+      tilesFetched: fetched,
+      cacheEntries: cache.size,
+      cacheBytes,
+    }),
+    clear() {
+      generation += 1;
+      for (const controller of active) controller.abort();
+      cache.clear();
+      cacheBytes = 0;
+    },
+  };
+}
