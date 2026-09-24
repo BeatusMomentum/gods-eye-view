@@ -6,6 +6,17 @@
   panel method.
 - On phones the title bar sits 16 px from the top so both Radio broadcast
   waves stay on-screen.
+- Keep Cyber right-rail panels mutually exclusive and Display, CCTV and Context
+  headers and frames fixed during content scrolling. Restore Radio's nested Context placement and compact
+  player. Add Cyber Sonar voice controls with settings and effect-state readback.
+  Keep keyboard-focus outlines visible inside Cyber's clipped map and cockpit
+  expand/collapse buttons, with a matching red hover border.
+
+- Add the opt-in Cyber HUD layout with coordinated map and cockpit panel
+  styling. Display exposes Sonar on/off, rings, range, power, opacity and sector.
+  Native point, billboard and label highlighting uses GPU draw commands; there
+  is no scene-dimming effect selector. Unsupported shaders retain native contact
+  rendering, and leaving Cyber restores the standard shell and contact treatment.
 
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
