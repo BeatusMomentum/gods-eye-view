@@ -94,6 +94,15 @@ try {
     () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
     { timeout: 60_000, polling: 500 },
   );
+  await page.waitForFunction(
+    () =>
+      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    { timeout: 60_000, polling: 250 },
+  );
+  // Startup restoration owns its camera flight until the loading cover is gone.
+  await page.evaluate(
+    () => window.__godsEyeView.styleManager.initialRestorePromise,
+  );
   await page.keyboard.press('Escape');
   async function fly(lat, lon, height = 2000, heading = 0, pitch = -75) {
     await page.evaluate(
@@ -181,11 +190,22 @@ try {
         )
           cameraEntities++;
       }
-    return { traffic, alpr, cameraEntities, sourceLabel: traffic.loadingLabel };
+    return {
+      traffic,
+      alpr,
+      cameraEntities,
+      sourceLabel: traffic.loadingLabel,
+      cameraHeight: viewer.camera.positionCartographic.height,
+    };
   });
   result.traffic = austin.traffic;
   result.alpr = austin.alpr;
   result.sourceLabel = austin.sourceLabel;
+  result.cameraHeight = austin.cameraHeight;
+  assert.ok(
+    austin.cameraHeight > 1500 && austin.cameraHeight < 2500,
+    'Austin assertions run at approximately 2 km',
+  );
   assert.ok(austin.traffic.count > 0, 'road dots rendered');
   assert.ok(austin.cameraEntities > 0, 'ALPR camera entities rendered');
   assert.match(austin.sourceLabel, /Roads: (TomTom|OpenStreetMap tiles)/);
