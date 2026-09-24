@@ -308,6 +308,7 @@ export function weatherProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
   timeoutMs = 12_000,
+  rainViewerSleep,
 } = {}) {
   const admitRainViewerTile = createRainViewerGovernor();
   const metadata = new Map();
@@ -334,7 +335,7 @@ export function weatherProxy({
         });
     }
   }
-  async function shared(key, work, clientSignal) {
+  async function shared(key, work, clientSignal, extraWaitMs = 0) {
     clientSignal.throwIfAborted();
     let operation = operations.get(key);
     if (operation?.controller.signal.aborted) {
@@ -356,7 +357,10 @@ export function weatherProxy({
         operation.reject(failure('weather_request_cancelled'));
       };
       controller.signal.addEventListener('abort', cancel, { once: true });
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(
+        () => controller.abort(),
+        timeoutMs + extraWaitMs,
+      );
       operation.promise = operation.promise.finally(() => {
         clearTimeout(timer);
         controller.signal.removeEventListener('abort', cancel);
@@ -659,17 +663,22 @@ export function weatherProxy({
         try {
           const bytes = await shared(
             `image:${key}`,
-            (signal) => {
+            async (signal) => {
               if (globalRadar) {
-                const retryAfter = admitRainViewerTile(now());
+                const retryAfter = await admitRainViewerTile.admit(now, {
+                  signal,
+                  sleep: rainViewerSleep,
+                });
                 if (retryAfter)
                   throw Object.assign(failure('weather_busy', 429), {
                     retryAfter,
                   });
               }
+              signal.throwIfAborted();
               return upstream(upstreamUrl.href, signal, imageShape);
             },
             controller.signal,
+            globalRadar ? 20_000 : 0,
           );
           rememberTile(key, bytes);
           cached = { bytes };

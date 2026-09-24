@@ -61,6 +61,7 @@ composite where national radars exist, with the past 2 hours at 10-minute steps
 on the shared observed timeline, and the region choice persists in share links.
 RainViewer uses pinned, validated 256 px Web Mercator tiles through zoom 7,
 5-minute metadata caching and a server-wide 80-tile-request rolling-minute limit;
+excess requests wait up to 20 seconds in a bounded FIFO queue;
 gaps do not mean no rain. Globe hosts draw those tiles directly; on 3D Tiles,
 the 6.2 km shell composes at most 24 tiles per full frame or detail window and
 reprojects them to an equirectangular image.

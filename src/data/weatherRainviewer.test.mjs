@@ -261,3 +261,147 @@ test('RainViewer rejects non-PNG and wrong PNG dimensions', async () => {
     assert.equal((await request(tile())).status, 503);
   }
 });
+
+function fakeGovernorClock() {
+  let time = 0;
+  const timers = new Set();
+  const now = () => time;
+  const sleep = (ms, _value, { signal }) =>
+    new Promise((resolve, reject) => {
+      signal.throwIfAborted();
+      const timer = {
+        at: time + ms,
+        resolve: () => {
+          signal.removeEventListener('abort', abort);
+          timers.delete(timer);
+          resolve();
+        },
+      };
+      const abort = () => {
+        timers.delete(timer);
+        reject(signal.reason);
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      timers.add(timer);
+    });
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  };
+  return {
+    now,
+    sleep,
+    flush,
+    async advance(ms) {
+      await flush();
+      time += ms;
+      for (const timer of [...timers]) if (timer.at <= time) timer.resolve();
+      await flush();
+    },
+  };
+}
+
+test('RainViewer queues a 100-request burst in FIFO order through the rolling window', async () => {
+  const governor = createRainViewerGovernor();
+  const clock = fakeGovernorClock();
+  const admitted = [];
+  const requests = Array.from({ length: 100 }, (_, i) =>
+    governor
+      .admit(clock.now, { sleep: clock.sleep, maxWaitMs: 60_000 })
+      .then((retry) => {
+        assert.equal(retry, 0);
+        admitted.push(i);
+      }),
+  );
+  await clock.flush();
+  assert.deepEqual(
+    admitted,
+    Array.from({ length: 80 }, (_, i) => i),
+  );
+  await clock.advance(59_999);
+  assert.equal(admitted.length, 80);
+  await clock.advance(1);
+  await Promise.all(requests);
+  assert.deepEqual(
+    admitted,
+    Array.from({ length: 100 }, (_, i) => i),
+  );
+});
+
+test('RainViewer bounds the queue and wait budget with retry seconds', async () => {
+  const governor = createRainViewerGovernor();
+  const clock = fakeGovernorClock();
+  for (let i = 0; i < 80; i++) governor(0);
+  assert.equal(await governor.admit(clock.now, { sleep: clock.sleep }), 60);
+  await clock.advance(40_000);
+  const first = governor.admit(clock.now, { sleep: clock.sleep, maxQueued: 1 });
+  assert.equal(
+    await governor.admit(clock.now, { sleep: clock.sleep, maxQueued: 1 }),
+    20,
+  );
+  await clock.advance(20_000);
+  assert.equal(await first, 0);
+});
+
+test('RainViewer abort removes a waiter without consuming capacity or blocking its successor', async () => {
+  const governor = createRainViewerGovernor();
+  const clock = fakeGovernorClock();
+  for (let i = 0; i < 80; i++) governor(0);
+  await clock.advance(40_000);
+  const controller = new AbortController();
+  const aborted = governor.admit(clock.now, {
+    sleep: clock.sleep,
+    signal: controller.signal,
+  });
+  const rejection = assert.rejects(aborted, { name: 'AbortError' });
+  const next = governor.admit(clock.now, { sleep: clock.sleep });
+  controller.abort();
+  await rejection;
+  await clock.advance(20_000);
+  assert.equal(await next, 0);
+  for (let i = 0; i < 79; i++) assert.equal(governor(clock.now()), 0);
+  assert.equal(governor(clock.now()), 60);
+  await assert.rejects(
+    governor.admit(clock.now, { signal: controller.signal }),
+    { name: 'AbortError' },
+  );
+});
+
+test('RainViewer queued requests retain their original deadline across window rechecks', async () => {
+  const governor = createRainViewerGovernor();
+  const clock = fakeGovernorClock();
+  for (let i = 0; i < 80; i++) governor(0);
+  await clock.advance(40_000);
+  const requests = Array.from({ length: 81 }, () =>
+    governor.admit(clock.now, { sleep: clock.sleep }),
+  );
+  await clock.advance(20_000);
+  const results = await Promise.all(requests);
+  assert.deepEqual(results.slice(0, 80), Array(80).fill(0));
+  assert.equal(results[80], 60);
+});
+
+test('RainViewer route waits at the upstream boundary while cache hits and duplicates cost no slots', async () => {
+  const clock = fakeGovernorClock();
+  let upstreamTiles = 0;
+  const request = install({
+    now: () => seconds * 1000 + clock.now(),
+    rainViewerSleep: clock.sleep,
+    fetchImpl: async (url) => {
+      if (url.includes('weather-maps.json')) return Response.json(manifest());
+      upstreamTiles++;
+      return png();
+    },
+  });
+  for (let x = 0; x < 80; x++)
+    assert.equal((await request(tile({ x }))).status, 200);
+  await clock.advance(40_000);
+  const first = request(tile({ x: 80 }));
+  const duplicate = request(tile({ x: 80 }));
+  await clock.flush();
+  assert.equal(upstreamTiles, 80);
+  assert.equal((await request(tile())).status, 200);
+  await clock.advance(20_000);
+  assert.equal((await first).status, 200);
+  assert.equal((await duplicate).status, 200);
+  assert.equal(upstreamTiles, 81);
+});
