@@ -28,6 +28,8 @@ export function createVectorTileSource({
   maxEntries = 64,
   maxCacheBytes = 24 * 1024 * 1024,
   maxResponseBytes = 4 * 1024 * 1024,
+  metadataCooldownMs = 5000,
+  now = Date.now,
 }) {
   const cache = new Map();
   const active = new Set();
@@ -35,6 +37,7 @@ export function createVectorTileSource({
   let metadata = null;
   let metadataError = null;
   let metadataFlight = null;
+  let metadataRetryAt = 0;
   let generation = 0;
   let fetched = 0;
   let activeWorkers = 0;
@@ -53,18 +56,23 @@ export function createVectorTileSource({
         ),
       12_000,
     );
+    let response;
     try {
-      const response = await fetchImpl(url, {
+      response = await fetchImpl(url, {
         signal: controller.signal,
         redirect: 'error',
       });
       if (!response.ok) {
-        await response.body?.cancel();
         throw new Error(`Vector tiles unavailable (HTTP ${response.status})`);
       }
       const value = await read(response, controller.signal);
       controller.signal.throwIfAborted();
       return value;
+    } catch (error) {
+      // Retain request ownership until every failed read has been cancelled.
+      controller.abort(error);
+      await response?.body?.cancel().catch(() => {});
+      throw error;
     } finally {
       clearTimeout(timer);
       parentSignal?.removeEventListener('abort', abort);
@@ -75,7 +83,9 @@ export function createVectorTileSource({
   async function getMetadata(signal) {
     signal?.throwIfAborted();
     if (metadata) return metadata;
-    if (metadataError) throw metadataError;
+    if (metadataError && (!metadataError.retryable || now() < metadataRetryAt))
+      throw metadataError;
+    metadataError = null;
     if (!metadataFlight) {
       const flight = {
         controller: new AbortController(),
@@ -100,26 +110,43 @@ export function createVectorTileSource({
             typeof url !== 'string' ||
             !['{z}', '{x}', '{y}'].every((token) => url.includes(token))
           )
-            throw new Error('Invalid vector tile metadata');
-          const parsed = new URL(
-            url.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0'),
-            allowedOrigin,
-          );
+            throw Object.assign(new Error('Invalid vector tile metadata'), {
+              retryable: false,
+            });
+          let parsed;
+          try {
+            parsed = new URL(
+              url.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0'),
+              allowedOrigin,
+            );
+          } catch {
+            throw Object.assign(new Error('Invalid vector tile origin'), {
+              retryable: false,
+            });
+          }
           if (
             parsed.origin !== allowedOrigin ||
             parsed.username ||
             parsed.password
           )
-            throw new Error('Invalid vector tile origin');
+            throw Object.assign(new Error('Invalid vector tile origin'), {
+              retryable: false,
+            });
           metadata = { ...value, template: url };
           return metadata;
         })
         .catch((error) => {
-          if (error.name === 'AbortError') throw error;
+          if (flight.controller.signal.aborted || error.name === 'AbortError')
+            throw error;
           metadataError = Object.assign(
             new Error('Vector tile metadata unavailable'),
-            { retryable: false },
+            {
+              retryable:
+                error.retryable !== false && !(error instanceof SyntaxError),
+            },
           );
+          metadataRetryAt =
+            now() + Math.min(30_000, Math.max(0, metadataCooldownMs));
           throw metadataError;
         })
         .finally(() => {
@@ -197,8 +224,8 @@ export function createVectorTileSource({
         .replace('{z}', tile.z)
         .replace('{x}', tile.x)
         .replace('{y}', tile.y);
-      const bytes = await request(url, signal, (res) =>
-        readResponseBytesCapped(res, maxResponseBytes),
+      const bytes = await request(url, signal, (res, requestSignal) =>
+        readResponseBytesCapped(res, maxResponseBytes, requestSignal),
       );
       const value = decode(bytes, tile.z, tile.x, tile.y);
       signal?.throwIfAborted();
@@ -281,6 +308,11 @@ export function createVectorTileSource({
     }),
     clear() {
       generation += 1;
+      metadataFlight?.controller.abort();
+      metadataFlight = null;
+      metadata = null;
+      metadataError = null;
+      metadataRetryAt = 0;
       for (const controller of active) controller.abort();
       cache.clear();
       cacheBytes = 0;
